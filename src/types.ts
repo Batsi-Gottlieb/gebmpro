@@ -1,0 +1,67 @@
+export type ClientRole = 'manager' | 'regular';
+
+export interface Client {
+  id: string;
+  projectId: string;
+  name: string;
+  email: string;
+  phone: string;
+  role: ClientRole;
+  sendNotificationsToManager: boolean; // Relevant only for managers, whether to copy/alert them
+  accessCode: string;
+  notes?: string;
+}
+
+export interface RequiredDocument {
+  id: string;
+  name: string;
+  isRequired: boolean;
+  description?: string;
+}
+
+export interface TrackingSettings {
+  reminderIntervalDays: number;
+  emailTemplate: string;
+  smsTemplate: string;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  description: string;
+  requiredDocuments: RequiredDocument[];
+  trackingSettings: TrackingSettings;
+}
+
+export interface FileVersion {
+  id: string;
+  fileName: string;
+  fileSize?: string;
+  storagePath?: string;
+  uploadedAt: string;
+  version: number;
+  status: 'draft' | 'pending' | 'approved' | 'rejected';
+  reviewComment?: string;
+  reviewedAt?: string;
+}
+
+export interface ClientProjectState {
+  clientId: string;
+  projectId: string;
+  // Map document id -> array of versions (latest is index 0 or highest version number)
+  documents: Record<string, FileVersion[]>;
+  comments?: string;
+}
+
+export interface NotificationLog {
+  id: string;
+  clientId: string;
+  clientName: string;
+  projectId: string;
+  type: 'email' | 'sms';
+  recipient: string;
+  subject?: string;
+  content: string;
+  sentAt: string;
+  status: 'sent' | 'failed';
+}
