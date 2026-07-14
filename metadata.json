@@ -1,0 +1,6 @@
+{
+  "name": "גוטליב את ביטון - מעקב מסמכים",
+  "description": "מערכת חכמה לניהול ומעקב אחרי מסמכי לקוחות עבור משרד רואי חשבון גוטליב את ביטון",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
