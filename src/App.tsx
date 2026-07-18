@@ -12,8 +12,9 @@ import { Client, Project, ClientProjectState, NotificationLog } from './types';
 import AdminPanel from './components/AdminPanel';
 import ClientPortal from './components/ClientPortal';
 import * as api from './lib/api';
+import { supabase } from './lib/supabaseClient';
 
-type Role = 'loading' | 'login' | 'client' | 'admin';
+type Role = 'loading' | 'login' | 'client' | 'admin' | 'recovery';
 
 export default function App() {
   const [currentRole, setCurrentRole] = useState<Role>('loading');
@@ -29,6 +30,14 @@ export default function App() {
   const [staffPassword, setStaffPassword] = useState('');
   const [staffLoginError, setStaffLoginError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Forgot / reset password
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotStatus, setForgotStatus] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState('');
+  const [recoveryError, setRecoveryError] = useState<string | null>(null);
 
   // Core data
   const [projects, setProjects] = useState<Project[]>([]);
@@ -84,6 +93,20 @@ export default function App() {
     })();
   }, [loadAdminData, loadClientData]);
 
+  // ---------- קישור איפוס סיסמה (מגיע מהמייל) ----------
+  // Supabase שולח את המשתמש חזרה לאתר עם session זמני ומאתת PASSWORD_RECOVERY.
+  // בלי המאזין הזה, לחיצה על קישור האיפוס לא הייתה עושה כלום - וזו הייתה הסיבה
+  // שהסיסמה בפועל אף פעם לא התעדכנה.
+  useEffect(() => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setRecoveryError(null);
+        setCurrentRole('recovery');
+      }
+    });
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
   // ---------- כניסה / יציאה ----------
   const handleClientLogin = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -118,6 +141,51 @@ export default function App() {
       setStaffPassword('');
     } catch (err) {
       setStaffLoginError(err instanceof Error ? err.message : 'התחברות נכשלה. בדקו אימייל/סיסמה.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotEmail.trim()) return;
+    setIsSubmitting(true);
+    setForgotStatus(null);
+    try {
+      await api.sendStaffPasswordReset(forgotEmail.trim(), window.location.origin);
+      setForgotStatus({
+        message: 'אם קיים חשבון עם המייל הזה, נשלח אליו קישור לאיפוס סיסמה. בדקו את תיבת הדואר (וגם ספאם).',
+        type: 'success',
+      });
+    } catch (err) {
+      setForgotStatus({ message: err instanceof Error ? err.message : 'שליחת מייל האיפוס נכשלה.', type: 'error' });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSetNewPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRecoveryError(null);
+    if (newPassword.length < 6) {
+      setRecoveryError('הסיסמה חייבת להכיל לפחות 6 תווים.');
+      return;
+    }
+    if (newPassword !== newPasswordConfirm) {
+      setRecoveryError('הסיסמאות אינן תואמות.');
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await api.updateStaffPassword(newPassword);
+      await api.logout();
+      setNewPassword('');
+      setNewPasswordConfirm('');
+      setShowStaffLogin(true);
+      setCurrentRole('login');
+      showAlert('הסיסמה עודכנה בהצלחה! נא להתחבר עם הסיסמה החדשה.');
+    } catch (err) {
+      setRecoveryError(err instanceof Error ? err.message : 'עדכון הסיסמה נכשל.');
     } finally {
       setIsSubmitting(false);
     }
@@ -317,6 +385,59 @@ export default function App() {
     );
   }
 
+  // ---------- מסך קביעת סיסמה חדשה (אחרי לחיצה על קישור איפוס מהמייל) ----------
+  if (currentRole === 'recovery') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4" dir="rtl">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-md p-6 md:p-8 w-full max-w-md space-y-6">
+          <div className="text-center space-y-2">
+            <h2 className="text-xl font-bold tracking-tight text-slate-900">קביעת סיסמה חדשה</h2>
+            <p className="text-xs text-slate-500">הזינו סיסמה חדשה לחשבון הצוות שלכם</p>
+          </div>
+
+          {recoveryError && (
+            <div className="bg-rose-50 text-rose-800 border border-rose-200 p-3 rounded-lg text-xs font-semibold flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-rose-500 flex-shrink-0" />
+              <span>{recoveryError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleSetNewPassword} className="space-y-3">
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1.5">סיסמה חדשה</label>
+              <input
+                type="password"
+                required
+                minLength={6}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="w-full bg-slate-50 rounded-xl px-4 py-3 border border-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1.5">אימות סיסמה</label>
+              <input
+                type="password"
+                required
+                minLength={6}
+                value={newPasswordConfirm}
+                onChange={(e) => setNewPasswordConfirm(e.target.value)}
+                className="w-full bg-slate-50 rounded-xl px-4 py-3 border border-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-bold py-3 px-4 rounded-xl text-sm flex items-center justify-center gap-1.5 transition-all"
+            >
+              {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'עדכון סיסמה'}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-indigo-500/20">
       <AnimatePresence>
@@ -418,6 +539,50 @@ export default function App() {
                     כניסת צוות המשרד (רו"ח / אדמין)
                   </button>
                 </>
+              ) : showForgotPassword ? (
+                <>
+                  {forgotStatus && (
+                    <div
+                      className={`p-3 rounded-lg text-xs font-semibold flex items-center gap-2 border ${
+                        forgotStatus.type === 'error'
+                          ? 'bg-rose-50 text-rose-800 border-rose-200'
+                          : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                      }`}
+                    >
+                      <span>{forgotStatus.message}</span>
+                    </div>
+                  )}
+
+                  <form onSubmit={handleForgotPassword} className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-500 mb-1.5">אימייל</label>
+                      <input
+                        type="email"
+                        required
+                        value={forgotEmail}
+                        onChange={(e) => setForgotEmail(e.target.value)}
+                        className="w-full bg-slate-50 rounded-xl px-4 py-3 border border-slate-200 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="w-full bg-slate-900 hover:bg-slate-800 disabled:opacity-60 text-white font-bold py-3 px-4 rounded-xl text-sm flex items-center justify-center gap-1.5 transition-all"
+                    >
+                      {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'שליחת קישור לאיפוס סיסמה'}
+                    </button>
+                  </form>
+
+                  <button
+                    onClick={() => {
+                      setShowForgotPassword(false);
+                      setForgotStatus(null);
+                    }}
+                    className="w-full text-center text-[11px] text-slate-400 hover:text-indigo-600 transition-colors"
+                  >
+                    חזרה לכניסת צוות
+                  </button>
+                </>
               ) : (
                 <>
                   {staffLoginError && (
@@ -456,6 +621,17 @@ export default function App() {
                       {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'כניסת צוות'}
                     </button>
                   </form>
+
+                  <button
+                    onClick={() => {
+                      setForgotEmail(staffEmail);
+                      setForgotStatus(null);
+                      setShowForgotPassword(true);
+                    }}
+                    className="w-full text-center text-[11px] text-slate-400 hover:text-indigo-600 transition-colors"
+                  >
+                    שכחתי סיסמה
+                  </button>
 
                   <button
                     onClick={() => setShowStaffLogin(false)}

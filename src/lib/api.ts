@@ -98,6 +98,20 @@ export async function logout() {
   await supabase.auth.signOut();
 }
 
+// שולח מייל איפוס סיסמה לאיש צוות. redirectTo צריך להיות כתובת האתר החי
+// (למשל https://gebmpro.vercel.app) כפי שמוגדר גם ב-Supabase > Authentication > URL Configuration.
+export async function sendStaffPasswordReset(email: string, redirectTo: string) {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+  if (error) throw error;
+}
+
+// קובע סיסמה חדשה - נקרא רק אחרי שהמשתמש הגיע דרך קישור איפוס סיסמה תקין
+// (Supabase כבר יצר עבורו session זמני מסוג recovery בשלב הזה)
+export async function updateStaffPassword(newPassword: string) {
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) throw error;
+}
+
 // בודק אם המשתמש המחובר כרגע הוא איש צוות (אדמין) או לקוח, ומחזיר פרטים
 export async function getCurrentSessionInfo(): Promise<
   | { kind: 'staff' }
