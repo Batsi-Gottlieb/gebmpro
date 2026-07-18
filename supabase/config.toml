@@ -1,0 +1,16 @@
+# JWT verification is enforced by Supabase's edge gateway BEFORE the function
+# code runs. That gate rejects unauthenticated requests - including CORS
+# preflight OPTIONS requests, which never carry an Authorization header.
+# These functions already do their own auth check internally (staff table /
+# access code), so the platform-level gate must be off or preflight breaks.
+[functions.create-client]
+verify_jwt = false
+
+[functions.import-clients]
+verify_jwt = false
+
+[functions.send-reminder]
+verify_jwt = false
+
+[functions.client-login]
+verify_jwt = false
