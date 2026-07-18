@@ -26,6 +26,7 @@ interface ClientRow {
   role: string
   send_notifications_to_manager: boolean
   access_code: string
+  receives_notifications: boolean
 }
 
 function buildMissingList(requiredDocs: RequiredDoc[], files: FileVersionRow[]): string {
@@ -132,14 +133,14 @@ Deno.serve(async (req: Request) => {
     if (clientId) {
       const { data: client } = await supabaseAdmin
         .from('clients')
-        .select('id, name, email, role, send_notifications_to_manager, access_code')
+        .select('id, name, email, role, send_notifications_to_manager, access_code, receives_notifications')
         .eq('id', clientId)
         .single()
       if (client) clientsToNotify = [client]
     } else {
       const { data: clients } = await supabaseAdmin
         .from('clients')
-        .select('id, name, email, role, send_notifications_to_manager, access_code')
+        .select('id, name, email, role, send_notifications_to_manager, access_code, receives_notifications')
         .eq('project_id', projectId)
       clientsToNotify = (clients ?? []).filter(
         (c) => c.role !== 'manager' || c.send_notifications_to_manager
@@ -184,34 +185,58 @@ Deno.serve(async (req: Request) => {
         appUrl,
       })
 
-      let status: 'sent' | 'failed' = 'sent'
-      let errorMessage: string | null = null
-
-      try {
-        await smtpClient.send({
-          from: Deno.env.get('SMTP_FROM')!,
-          to: client.email,
-          subject,
-          content: body,
-        })
-      } catch (sendErr) {
-        status = 'failed'
-        errorMessage = sendErr instanceof Error ? sendErr.message : 'שגיאת שליחה'
+      // בונים רשימת נמענים: הלקוח הראשי (אם לא ביטל התראות) + כל אנשי הקשר
+      // הנוספים שלו שמוגדרים לקבל התראות (client_contacts.receives_notifications)
+      const recipientEmails: string[] = []
+      if (client.receives_notifications && client.email) {
+        recipientEmails.push(client.email)
+      }
+      const { data: contacts } = await supabaseAdmin
+        .from('client_contacts')
+        .select('email, receives_notifications')
+        .eq('client_id', client.id)
+        .eq('receives_notifications', true)
+      for (const contact of contacts ?? []) {
+        if (contact.email) recipientEmails.push(contact.email)
       }
 
-      await supabaseAdmin.from('notification_logs').insert({
-        client_id: client.id,
-        client_name: client.name,
-        project_id: projectId,
-        type: 'email',
-        recipient: client.email,
-        subject,
-        content: body,
-        status,
-        error_message: errorMessage,
-      })
+      if (recipientEmails.length === 0) {
+        results.push({ clientId: client.id, status: 'skipped' })
+        continue
+      }
 
-      results.push({ clientId: client.id, status })
+      let anySent = false
+      for (const recipientEmail of recipientEmails) {
+        let status: 'sent' | 'failed' = 'sent'
+        let errorMessage: string | null = null
+
+        try {
+          await smtpClient.send({
+            from: Deno.env.get('SMTP_FROM')!,
+            to: recipientEmail,
+            subject,
+            content: body,
+          })
+          anySent = true
+        } catch (sendErr) {
+          status = 'failed'
+          errorMessage = sendErr instanceof Error ? sendErr.message : 'שגיאת שליחה'
+        }
+
+        await supabaseAdmin.from('notification_logs').insert({
+          client_id: client.id,
+          client_name: client.name,
+          project_id: projectId,
+          type: 'email',
+          recipient: recipientEmail,
+          subject,
+          content: body,
+          status,
+          error_message: errorMessage,
+        })
+      }
+
+      results.push({ clientId: client.id, status: anySent ? 'sent' : 'failed' })
     }
 
     await smtpClient.close()

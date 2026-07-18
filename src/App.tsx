@@ -8,7 +8,7 @@ import {
   Loader2,
   UserCog,
 } from 'lucide-react';
-import { Client, Project, ClientProjectState, NotificationLog } from './types';
+import { Client, Project, ClientProjectState, NotificationLog, ClientContact, StaffMember } from './types';
 import AdminPanel from './components/AdminPanel';
 import ClientPortal from './components/ClientPortal';
 import * as api from './lib/api';
@@ -44,6 +44,8 @@ export default function App() {
   const [clients, setClients] = useState<Client[]>([]);
   const [clientStates, setClientStates] = useState<ClientProjectState[]>([]);
   const [notificationLogs, setNotificationLogs] = useState<NotificationLog[]>([]);
+  const [clientContacts, setClientContacts] = useState<ClientContact[]>([]);
+  const [staff, setStaff] = useState<StaffMember[]>([]);
 
   const [alertBanner, setAlertBanner] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const showAlert = (message: string, type: 'success' | 'error' = 'success') => {
@@ -53,16 +55,20 @@ export default function App() {
 
   // ---------- טעינת נתונים ----------
   const loadAdminData = useCallback(async () => {
-    const [p, c, s, l] = await Promise.all([
+    const [p, c, s, l, cc, st] = await Promise.all([
       api.fetchProjects(),
       api.fetchClients(),
       api.fetchClientStates(),
       api.fetchNotificationLogs(),
+      api.fetchClientContacts(),
+      api.fetchStaff(),
     ]);
     setProjects(p);
     setClients(c as Client[]);
     setClientStates(s);
     setNotificationLogs(l);
+    setClientContacts(cc);
+    setStaff(st);
   }, []);
 
   const loadClientData = useCallback(async () => {
@@ -334,6 +340,72 @@ export default function App() {
       showAlert('נשלחו תזכורות גורפות לכלל הלקוחות שטרם השלימו הגשות!');
     } catch (err) {
       showAlert(err instanceof Error ? err.message : 'שגיאה בשליחת תזכורות', 'error');
+    }
+  };
+
+  // ---------- אנשי קשר נוספים ללקוח ----------
+  const handleAddClientContact = async (
+    clientId: string,
+    contact: { name: string; email?: string; phone?: string; receivesNotifications: boolean }
+  ) => {
+    try {
+      const result = await api.addClientContact(clientId, contact);
+      await loadAdminData();
+      showAlert(
+        `איש הקשר "${contact.name}" נוסף בהצלחה` +
+          (result.emailSent || result.smsSent ? ' ונשלחה לו הודעת כניסה.' : '.')
+      );
+    } catch (err) {
+      showAlert(err instanceof Error ? err.message : 'שגיאה בהוספת איש קשר', 'error');
+    }
+  };
+
+  const handleUpdateClientContact = async (
+    contactId: string,
+    updates: Partial<Pick<ClientContact, 'name' | 'email' | 'phone' | 'receivesNotifications'>>
+  ) => {
+    try {
+      await api.updateClientContact(contactId, updates);
+      await loadAdminData();
+      showAlert('פרטי איש הקשר עודכנו בהצלחה');
+    } catch (err) {
+      showAlert(err instanceof Error ? err.message : 'שגיאה בעדכון איש קשר', 'error');
+    }
+  };
+
+  const handleDeleteClientContact = async (contactId: string) => {
+    if (!confirm('להסיר את איש הקשר הזה?')) return;
+    try {
+      await api.deleteClientContact(contactId);
+      await loadAdminData();
+      showAlert('איש הקשר הוסר בהצלחה');
+    } catch (err) {
+      showAlert(err instanceof Error ? err.message : 'שגיאה בהסרת איש קשר', 'error');
+    }
+  };
+
+  // ---------- ניהול אנשי צוות (אדמינים) ----------
+  const handleAddStaff = async (fullName: string, email: string) => {
+    try {
+      const result = await api.addStaffMember(fullName, email);
+      await loadAdminData();
+      showAlert(
+        `איש הצוות "${fullName}" נוצר בהצלחה` +
+          (result.emailSent ? ' ונשלח לו מייל להגדרת סיסמה.' : ' (המייל לא נשלח - יש לבדוק הגדרות SMTP).')
+      );
+    } catch (err) {
+      showAlert(err instanceof Error ? err.message : 'שגיאה ביצירת איש צוות', 'error');
+    }
+  };
+
+  const handleRemoveStaff = async (staffId: string) => {
+    if (!confirm('להסיר את איש הצוות הזה? הוא לא יוכל יותר להתחבר לפאנל הניהול.')) return;
+    try {
+      await api.removeStaffMember(staffId);
+      await loadAdminData();
+      showAlert('איש הצוות הוסר בהצלחה');
+    } catch (err) {
+      showAlert(err instanceof Error ? err.message : 'שגיאה בהסרת איש צוות', 'error');
     }
   };
 
@@ -668,6 +740,8 @@ export default function App() {
             clients={clients}
             clientStates={clientStates}
             notificationLogs={notificationLogs}
+            clientContacts={clientContacts}
+            staff={staff}
             onAddClient={handleAddClient}
             onUpdateClient={handleUpdateClient}
             onDeleteClient={handleDeleteClient}
@@ -680,6 +754,11 @@ export default function App() {
             onExportData={handleExportData}
             onImportData={handleImportData}
             onImpersonate={handleImpersonate}
+            onAddClientContact={handleAddClientContact}
+            onUpdateClientContact={handleUpdateClientContact}
+            onDeleteClientContact={handleDeleteClientContact}
+            onAddStaff={handleAddStaff}
+            onRemoveStaff={handleRemoveStaff}
           />
         )}
       </div>

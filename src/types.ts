@@ -10,6 +10,24 @@ export interface Client {
   sendNotificationsToManager: boolean; // Relevant only for managers, whether to copy/alert them
   accessCode: string;
   notes?: string;
+  receivesNotifications: boolean; // Whether the primary contact gets ongoing reminders (welcome message always sent regardless)
+}
+
+// איש קשר נוסף של לקוח - נכנס לפורטל עם אותו קוד גישה של הלקוח הראשי
+export interface ClientContact {
+  id: string;
+  clientId: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  receivesNotifications: boolean;
+}
+
+// איש צוות המשרד (אדמין) שיכול להתחבר לפאנל הניהול
+export interface StaffMember {
+  id: string;
+  fullName: string;
+  email: string;
 }
 
 export interface RequiredDocument {

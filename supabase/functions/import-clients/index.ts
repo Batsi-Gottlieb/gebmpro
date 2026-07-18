@@ -7,6 +7,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { corsHeaders, handleCors } from '../_shared/cors.ts'
 import { sendMail, buildWelcomeEmail } from '../_shared/mailer.ts'
+import { sendSms, buildWelcomeSms } from '../_shared/sms.ts'
 
 function generateAccessCode(prefix: string) {
   const num = Math.floor(1000 + Math.random() * 9000)
@@ -125,7 +126,7 @@ Deno.serve(async (req: Request) => {
         .update({ auth_user_id: authUser.user.id })
         .eq('id', newClient.id)
 
-      // שליחת מייל עם קוד הגישה - best-effort, לא חוסמת/מפילה את שאר הייבוא
+      // שליחת מייל + SMS עם קוד הגישה - best-effort, לא חוסמת/מפילה את שאר הייבוא
       const emailBody = buildWelcomeEmail(row.name, accessCode, appUrl)
       const mailResult = await sendMail(row.email, 'פרטי כניסה לפורטל המסמכים', emailBody)
       await supabaseAdmin.from('notification_logs').insert({
@@ -139,6 +140,21 @@ Deno.serve(async (req: Request) => {
         status: mailResult.ok ? 'sent' : 'failed',
         error_message: mailResult.ok ? null : mailResult.error ?? null,
       })
+
+      if (row.phone) {
+        const smsBody = buildWelcomeSms(row.name, accessCode, appUrl)
+        const smsResult = await sendSms(row.phone, smsBody)
+        await supabaseAdmin.from('notification_logs').insert({
+          client_id: newClient.id,
+          client_name: row.name,
+          project_id: projectId,
+          type: 'sms',
+          recipient: row.phone,
+          content: smsBody,
+          status: smsResult.ok ? 'sent' : 'failed',
+          error_message: smsResult.ok ? null : smsResult.error ?? null,
+        })
+      }
 
       created.push({ ...newClient, access_code: accessCode })
     }

@@ -5,6 +5,8 @@ import {
   ClientProjectState,
   FileVersion,
   NotificationLog,
+  ClientContact,
+  StaffMember,
 } from '../types';
 
 // ============================================================
@@ -23,6 +25,26 @@ function mapClientRow(row: any): Client {
     sendNotificationsToManager: row.send_notifications_to_manager,
     accessCode: row.access_code,
     notes: row.notes ?? undefined,
+    receivesNotifications: row.receives_notifications ?? true,
+  };
+}
+
+function mapClientContactRow(row: any): ClientContact {
+  return {
+    id: row.id,
+    clientId: row.client_id,
+    name: row.name,
+    email: row.email ?? undefined,
+    phone: row.phone ?? undefined,
+    receivesNotifications: row.receives_notifications ?? true,
+  };
+}
+
+function mapStaffRow(row: any): StaffMember {
+  return {
+    id: row.id,
+    fullName: row.full_name,
+    email: row.email,
   };
 }
 
@@ -402,5 +424,84 @@ export async function updateProjectSettings(
   if (settings.smsTemplate !== undefined) dbUpdates.sms_template = settings.smsTemplate;
 
   const { error } = await supabase.from('projects').update(dbUpdates).eq('id', projectId);
+  if (error) throw error;
+}
+
+// ============================================================
+// אנשי קשר נוספים ללקוח
+// ============================================================
+
+export async function fetchClientContacts(): Promise<ClientContact[]> {
+  const { data, error } = await supabase.from('client_contacts').select('*').order('created_at');
+  if (error) throw error;
+  return (data ?? []).map(mapClientContactRow);
+}
+
+export async function addClientContact(
+  clientId: string,
+  contact: { name: string; email?: string; phone?: string; receivesNotifications: boolean }
+): Promise<{ contact: ClientContact; emailSent: boolean; smsSent: boolean }> {
+  const res = await fetch(`${FUNCTIONS_URL}/add-client-contact`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
+    body: JSON.stringify({
+      clientId,
+      name: contact.name,
+      email: contact.email,
+      phone: contact.phone,
+      receivesNotifications: contact.receivesNotifications,
+      appUrl: window.location.origin,
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'שגיאה בהוספת איש קשר');
+  return { contact: mapClientContactRow(data.contact), emailSent: !!data.emailSent, smsSent: !!data.smsSent };
+}
+
+export async function updateClientContact(
+  contactId: string,
+  updates: Partial<Pick<ClientContact, 'name' | 'email' | 'phone' | 'receivesNotifications'>>
+): Promise<void> {
+  const dbUpdates: Record<string, unknown> = {};
+  if (updates.name !== undefined) dbUpdates.name = updates.name;
+  if (updates.email !== undefined) dbUpdates.email = updates.email;
+  if (updates.phone !== undefined) dbUpdates.phone = updates.phone;
+  if (updates.receivesNotifications !== undefined) dbUpdates.receives_notifications = updates.receivesNotifications;
+
+  const { error } = await supabase.from('client_contacts').update(dbUpdates).eq('id', contactId);
+  if (error) throw error;
+}
+
+export async function deleteClientContact(contactId: string): Promise<void> {
+  const { error } = await supabase.from('client_contacts').delete().eq('id', contactId);
+  if (error) throw error;
+}
+
+// ============================================================
+// ניהול אנשי צוות (אדמינים נוספים)
+// ============================================================
+
+export async function fetchStaff(): Promise<StaffMember[]> {
+  const { data, error } = await supabase.from('staff').select('*').order('created_at');
+  if (error) throw error;
+  return (data ?? []).map(mapStaffRow);
+}
+
+export async function addStaffMember(
+  fullName: string,
+  email: string
+): Promise<{ staff: StaffMember; emailSent: boolean }> {
+  const res = await fetch(`${FUNCTIONS_URL}/create-staff`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
+    body: JSON.stringify({ fullName, email, appUrl: window.location.origin }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'שגיאה ביצירת איש הצוות');
+  return { staff: mapStaffRow(data.staff), emailSent: !!data.emailSent };
+}
+
+export async function removeStaffMember(staffId: string): Promise<void> {
+  const { error } = await supabase.from('staff').delete().eq('id', staffId);
   if (error) throw error;
 }

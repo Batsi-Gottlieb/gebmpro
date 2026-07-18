@@ -28,15 +28,21 @@ import {
   FileDown,
   RefreshCw,
   Sliders,
-  Copy
+  Copy,
+  UserPlus,
+  UserCog,
+  BellOff,
+  BellRing
 } from 'lucide-react';
-import { Client, Project, ClientProjectState, FileVersion, NotificationLog } from '../types';
+import { Client, Project, ClientProjectState, FileVersion, NotificationLog, ClientContact, StaffMember } from '../types';
 
 interface AdminPanelProps {
   projects: Project[];
   clients: Client[];
   clientStates: ClientProjectState[];
   notificationLogs: NotificationLog[];
+  clientContacts: ClientContact[];
+  staff: StaffMember[];
   onAddClient: (client: Omit<Client, 'id' | 'accessCode' | 'projectId'>, projectId: string) => void;
   onUpdateClient: (clientId: string, updated: Partial<Client>) => void;
   onDeleteClient: (clientId: string) => void;
@@ -49,6 +55,11 @@ interface AdminPanelProps {
   onExportData: () => void;
   onImportData: (jsonStr: string) => boolean;
   onImpersonate: (accessCode: string) => void;
+  onAddClientContact: (clientId: string, contact: { name: string; email?: string; phone?: string; receivesNotifications: boolean }) => void;
+  onUpdateClientContact: (contactId: string, updates: Partial<Pick<ClientContact, 'name' | 'email' | 'phone' | 'receivesNotifications'>>) => void;
+  onDeleteClientContact: (contactId: string) => void;
+  onAddStaff: (fullName: string, email: string) => void;
+  onRemoveStaff: (staffId: string) => void;
 }
 
 export default function AdminPanel({
@@ -56,6 +67,8 @@ export default function AdminPanel({
   clients,
   clientStates,
   notificationLogs,
+  clientContacts,
+  staff,
   onAddClient,
   onUpdateClient,
   onDeleteClient,
@@ -67,10 +80,27 @@ export default function AdminPanel({
   onUpdateProjectSettings,
   onExportData,
   onImportData,
-  onImpersonate
+  onImpersonate,
+  onAddClientContact,
+  onUpdateClientContact,
+  onDeleteClientContact,
+  onAddStaff,
+  onRemoveStaff
 }: AdminPanelProps) {
   // Navigation & Tabs
-  const [activeTab, setActiveTab] = useState<'clients' | 'import' | 'settings' | 'logs' | 'export-import'>('clients');
+  const [activeTab, setActiveTab] = useState<'clients' | 'import' | 'settings' | 'logs' | 'export-import' | 'users'>('clients');
+
+  // New contact form (per selected client)
+  const [isAddingContact, setIsAddingContact] = useState(false);
+  const [newContactName, setNewContactName] = useState('');
+  const [newContactEmail, setNewContactEmail] = useState('');
+  const [newContactPhone, setNewContactPhone] = useState('');
+  const [newContactNotify, setNewContactNotify] = useState(true);
+
+  // New staff form
+  const [isAddingStaff, setIsAddingStaff] = useState(false);
+  const [newStaffName, setNewStaffName] = useState('');
+  const [newStaffEmail, setNewStaffEmail] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState<string>(projects[0]?.id || 'nitzanim-2026');
   
   // Client selection for CPA Review Workflow
@@ -333,6 +363,17 @@ export default function AdminPanel({
           >
             <Sliders className="w-4 h-4" />
             <span>ייצוא וייבוא לקלוד</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('users')}
+            className={`flex items-center gap-2 px-4 py-3 rounded-lg text-sm font-bold transition-all w-full text-right cursor-pointer ${
+              activeTab === 'users' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+            }`}
+            id="nav-tab-users"
+          >
+            <UserCog className="w-4 h-4" />
+            <span>ניהול משתמשי מנהל</span>
           </button>
         </aside>
 
@@ -749,6 +790,144 @@ export default function AdminPanel({
                             <h3 className="text-lg font-bold text-slate-900">פאנל בדיקה ואישור רו"ח: {client.name}</h3>
                             <p className="text-xs text-slate-500">עבור פרויקט: {selectedProject.name}</p>
                           </div>
+                        </div>
+
+                        {/* SECTION: אנשי קשר נוספים ללקוח - כולם נכנסים עם אותו קוד גישה */}
+                        <div className="mb-6 bg-slate-50 border border-slate-200 rounded-xl p-4">
+                          <div className="flex justify-between items-center mb-3">
+                            <h4 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                              <UserPlus className="w-4 h-4 text-indigo-600" />
+                              אנשי קשר נוספים ({clientContacts.filter(cc => cc.clientId === client.id).length})
+                            </h4>
+                            <button
+                              onClick={() => setIsAddingContact(!isAddingContact)}
+                              className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs px-3 py-1.5 rounded-lg transition-colors border border-indigo-200 cursor-pointer"
+                            >
+                              {isAddingContact ? 'ביטול' : '+ הוספת איש קשר'}
+                            </button>
+                          </div>
+
+                          <AnimatePresence>
+                            {isAddingContact && (
+                              <motion.form
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                onSubmit={(e) => {
+                                  e.preventDefault();
+                                  if (!newContactName) return;
+                                  onAddClientContact(client.id, {
+                                    name: newContactName,
+                                    email: newContactEmail || undefined,
+                                    phone: newContactPhone || undefined,
+                                    receivesNotifications: newContactNotify,
+                                  });
+                                  setNewContactName('');
+                                  setNewContactEmail('');
+                                  setNewContactPhone('');
+                                  setNewContactNotify(true);
+                                  setIsAddingContact(false);
+                                }}
+                                className="grid grid-cols-1 md:grid-cols-4 gap-2 mb-3 overflow-hidden bg-white p-3 rounded-lg border border-slate-200"
+                              >
+                                <input
+                                  type="text"
+                                  required
+                                  placeholder="שם *"
+                                  value={newContactName}
+                                  onChange={(e) => setNewContactName(e.target.value)}
+                                  className="bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                                />
+                                <input
+                                  type="email"
+                                  placeholder="אימייל"
+                                  value={newContactEmail}
+                                  onChange={(e) => setNewContactEmail(e.target.value)}
+                                  className="bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                                />
+                                <input
+                                  type="text"
+                                  placeholder="נייד"
+                                  value={newContactPhone}
+                                  onChange={(e) => setNewContactPhone(e.target.value)}
+                                  className="bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-2 text-xs font-mono focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                                />
+                                <div className="flex items-center gap-3">
+                                  <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 cursor-pointer select-none">
+                                    <input
+                                      type="checkbox"
+                                      checked={newContactNotify}
+                                      onChange={(e) => setNewContactNotify(e.target.checked)}
+                                      className="w-3.5 h-3.5 accent-indigo-600 rounded cursor-pointer"
+                                    />
+                                    מקבל התראות
+                                  </label>
+                                  <button
+                                    type="submit"
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition-colors cursor-pointer"
+                                  >
+                                    שמור
+                                  </button>
+                                </div>
+                              </motion.form>
+                            )}
+                          </AnimatePresence>
+
+                          <div className="flex justify-between items-center bg-indigo-50/40 p-2 rounded-lg border border-indigo-100 text-xs mb-2">
+                            <div>
+                              <span className="font-bold text-slate-800">{client.name}</span>
+                              <span className="text-[10px] text-indigo-600 font-bold mr-2">(איש קשר ראשי)</span>
+                              <span className="text-slate-500 mr-2"> • {client.email}</span>
+                            </div>
+                            <button
+                              onClick={() => onUpdateClient(client.id, { receivesNotifications: !client.receivesNotifications })}
+                              className={`flex items-center gap-1 font-bold px-2 py-1 rounded-lg border cursor-pointer ${
+                                client.receivesNotifications
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : 'bg-slate-100 text-slate-500 border-slate-200'
+                              }`}
+                              title="הפעל/כבה קבלת התראות שוטפות"
+                            >
+                              {client.receivesNotifications ? <BellRing className="w-3 h-3" /> : <BellOff className="w-3 h-3" />}
+                              {client.receivesNotifications ? 'מקבל התראות' : 'לא מקבל'}
+                            </button>
+                          </div>
+
+                          {clientContacts.filter(cc => cc.clientId === client.id).length === 0 ? (
+                            <p className="text-xs text-slate-400 italic">אין עדיין אנשי קשר נוספים - רק הלקוח הראשי.</p>
+                          ) : (
+                            <div className="space-y-1.5">
+                              {clientContacts.filter(cc => cc.clientId === client.id).map(cc => (
+                                <div key={cc.id} className="flex justify-between items-center bg-white p-2 rounded-lg border border-slate-200 text-xs">
+                                  <div>
+                                    <span className="font-bold text-slate-800">{cc.name}</span>
+                                    {cc.email && <span className="text-slate-500 mr-2"> • {cc.email}</span>}
+                                    {cc.phone && <span className="text-slate-500 mr-2"> • {cc.phone}</span>}
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={() => onUpdateClientContact(cc.id, { receivesNotifications: !cc.receivesNotifications })}
+                                      className={`flex items-center gap-1 font-bold px-2 py-1 rounded-lg border cursor-pointer ${
+                                        cc.receivesNotifications
+                                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                          : 'bg-slate-100 text-slate-500 border-slate-200'
+                                      }`}
+                                      title="הפעל/כבה קבלת התראות שוטפות"
+                                    >
+                                      {cc.receivesNotifications ? <BellRing className="w-3 h-3" /> : <BellOff className="w-3 h-3" />}
+                                      {cc.receivesNotifications ? 'מקבל התראות' : 'לא מקבל'}
+                                    </button>
+                                    <button
+                                      onClick={() => onDeleteClientContact(cc.id)}
+                                      className="bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 p-1 rounded-lg border border-slate-200 cursor-pointer"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
 
                         {state?.comments && (
@@ -1256,6 +1435,118 @@ export default function AdminPanel({
                       ייבא נתונים ושחזר מצב
                     </button>
                   </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 6: STAFF / ADMIN USERS MANAGEMENT */}
+          {activeTab === 'users' && (
+            <div className="space-y-6">
+              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900 mb-2 flex items-center gap-2">
+                      <UserCog className="w-5 h-5 text-indigo-600" />
+                      ניהול משתמשי מנהל (צוות המשרד)
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      אנשי צוות שמופיעים ברשימה יכולים להתחבר לפאנל הניהול הזה עם אימייל וסיסמה משלהם.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setIsAddingStaff(true)}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2 rounded-lg text-sm flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <UserPlus className="w-4 h-4" />
+                    הוספת איש צוות
+                  </button>
+                </div>
+
+                <AnimatePresence>
+                  {isAddingStaff && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="bg-slate-50 p-4 rounded-xl border border-slate-200 mb-4 overflow-hidden"
+                    >
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          if (!newStaffName || !newStaffEmail) return;
+                          onAddStaff(newStaffName, newStaffEmail);
+                          setNewStaffName('');
+                          setNewStaffEmail('');
+                          setIsAddingStaff(false);
+                        }}
+                        className="grid grid-cols-1 md:grid-cols-3 gap-3"
+                      >
+                        <div>
+                          <label className="block text-xs font-bold text-slate-500 mb-1">שם מלא *</label>
+                          <input
+                            type="text"
+                            required
+                            value={newStaffName}
+                            onChange={(e) => setNewStaffName(e.target.value)}
+                            className="w-full bg-white text-slate-900 border border-slate-200 rounded-lg p-2 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-500 mb-1">אימייל *</label>
+                          <input
+                            type="email"
+                            required
+                            value={newStaffEmail}
+                            onChange={(e) => setNewStaffEmail(e.target.value)}
+                            className="w-full bg-white text-slate-900 border border-slate-200 rounded-lg p-2 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                          />
+                        </div>
+                        <div className="flex items-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setIsAddingStaff(false)}
+                            className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-2 rounded-lg text-sm transition-colors cursor-pointer"
+                          >
+                            ביטול
+                          </button>
+                          <button
+                            type="submit"
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2 rounded-lg text-sm transition-colors cursor-pointer"
+                          >
+                            שמור
+                          </button>
+                        </div>
+                      </form>
+                      <p className="text-[10px] text-slate-500 mt-2">
+                        ישלח לאיש הצוות מייל עם קישור להגדרת סיסמה וכניסה ראשונה.
+                      </p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <div className="divide-y divide-slate-200">
+                  {staff.length === 0 ? (
+                    <div className="text-center py-8 text-slate-400 border border-dashed border-slate-200 rounded-lg">
+                      אין עדיין אנשי צוות רשומים.
+                    </div>
+                  ) : (
+                    staff.map((s) => (
+                      <div key={s.id} className="py-3 flex justify-between items-center">
+                        <div>
+                          <div className="font-bold text-slate-900 text-sm">{s.fullName}</div>
+                          <div className="text-xs text-slate-500">{s.email}</div>
+                        </div>
+                        <button
+                          onClick={() => onRemoveStaff(s.id)}
+                          className="bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 p-1.5 rounded-lg border border-slate-200 cursor-pointer"
+                          title="הסר איש צוות"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>

@@ -71,12 +71,33 @@ create table clients (
   notes text,
   -- מקושר למשתמש הפנימי ב-Supabase Auth (נוצר אוטומטית ע"י Edge Function)
   auth_user_id uuid unique references auth.users (id) on delete set null,
+  -- האם הלקוח הראשי (השורה הזו) מקבל מיילים/SMS שוטפים (תזכורות).
+  -- הודעת הכניסה הראשונית עם קוד הגישה נשלחת בכל מקרה, ללא תלות בדגל הזה.
+  receives_notifications boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
 create index clients_project_id_idx on clients (project_id);
 create index clients_access_code_idx on clients (access_code);
+
+-- ============================================================
+-- אנשי קשר נוספים לכל לקוח (למשל כמה עובדים באותה חברה) -
+-- כולם נכנסים לפורטל עם אותו קוד גישה של הלקוח הראשי, וכל אחד
+-- עם הגדרה נפרדת האם מקבל התראות שוטפות (תזכורות) או לא.
+-- הודעת הכניסה הראשונית עם קוד הגישה נשלחת לכולם, ללא תלות בדגל.
+-- ============================================================
+create table client_contacts (
+  id uuid primary key default gen_random_uuid(),
+  client_id uuid not null references clients (id) on delete cascade,
+  name text not null,
+  email text,
+  phone text,
+  receives_notifications boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+create index client_contacts_client_id_idx on client_contacts (client_id);
 
 -- ============================================================
 -- גרסאות קבצים שהועלו
@@ -157,10 +178,12 @@ alter table clients enable row level security;
 alter table file_versions enable row level security;
 alter table client_submissions enable row level security;
 alter table notification_logs enable row level security;
+alter table client_contacts enable row level security;
 
--- ---- staff: רק איש צוות יכול לראות את רשימת הצוות ----
-create policy "staff_select_own_team" on staff
-  for select using (is_staff());
+-- ---- staff: איש צוות מנהל ורואה את כלל אנשי הצוות (הוספה חדשה
+--      של staff row עדיין דורשת Edge Function - יצירת auth user קודם) ----
+create policy "staff_full_access_team" on staff
+  for all using (is_staff()) with check (is_staff());
 
 -- ---- projects ----
 create policy "staff_full_access_projects" on projects
@@ -246,6 +269,10 @@ create policy "clients_read_own_submissions" on client_submissions
 
 -- ---- notification_logs: רק צוות המשרד רואה את היומן ----
 create policy "staff_full_access_notification_logs" on notification_logs
+  for all using (is_staff()) with check (is_staff());
+
+-- ---- client_contacts: ניהול מלא לצוות בלבד ----
+create policy "staff_full_access_client_contacts" on client_contacts
   for all using (is_staff()) with check (is_staff());
 
 -- ============================================================
