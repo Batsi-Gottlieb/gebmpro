@@ -300,6 +300,7 @@ export async function addClient(
       sendNotificationsToManager: client.sendNotificationsToManager,
       notes: client.notes,
       codePrefix,
+      appUrl: window.location.origin,
     }),
   });
   const data = await res.json();
@@ -337,6 +338,7 @@ export async function importClients(
     body: JSON.stringify({
       projectId,
       codePrefix,
+      appUrl: window.location.origin,
       rows: rows.map((r) => ({
         name: r.name,
         email: r.email,

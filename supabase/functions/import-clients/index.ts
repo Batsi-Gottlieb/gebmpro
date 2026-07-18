@@ -6,6 +6,7 @@
 
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { corsHeaders, handleCors } from '../_shared/cors.ts'
+import { sendMail, buildWelcomeEmail } from '../_shared/mailer.ts'
 
 function generateAccessCode(prefix: string) {
   const num = Math.floor(1000 + Math.random() * 9000)
@@ -61,10 +62,11 @@ Deno.serve(async (req: Request) => {
       })
     }
 
-    const { projectId, rows, codePrefix } = (await req.json()) as {
+    const { projectId, rows, codePrefix, appUrl } = (await req.json()) as {
       projectId: string
       rows: ImportRow[]
       codePrefix?: string
+      appUrl?: string
     }
 
     if (!projectId || !Array.isArray(rows) || rows.length === 0) {
@@ -122,6 +124,21 @@ Deno.serve(async (req: Request) => {
         .from('clients')
         .update({ auth_user_id: authUser.user.id })
         .eq('id', newClient.id)
+
+      // שליחת מייל עם קוד הגישה - best-effort, לא חוסמת/מפילה את שאר הייבוא
+      const emailBody = buildWelcomeEmail(row.name, accessCode, appUrl)
+      const mailResult = await sendMail(row.email, 'פרטי כניסה לפורטל המסמכים', emailBody)
+      await supabaseAdmin.from('notification_logs').insert({
+        client_id: newClient.id,
+        client_name: row.name,
+        project_id: projectId,
+        type: 'email',
+        recipient: row.email,
+        subject: 'פרטי כניסה לפורטל המסמכים',
+        content: emailBody,
+        status: mailResult.ok ? 'sent' : 'failed',
+        error_message: mailResult.ok ? null : mailResult.error ?? null,
+      })
 
       created.push({ ...newClient, access_code: accessCode })
     }
