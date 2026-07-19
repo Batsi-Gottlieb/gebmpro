@@ -80,7 +80,7 @@ export interface NotificationLog {
   clientId: string;
   clientName: string;
   projectId: string;
-  type: 'email' | 'sms';
+  type: 'email' | 'sms' | 'whatsapp';
   recipient: string;
   subject?: string;
   content: string;

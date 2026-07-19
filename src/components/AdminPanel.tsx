@@ -32,7 +32,9 @@ import {
   UserPlus,
   UserCog,
   BellOff,
-  BellRing
+  BellRing,
+  LayoutGrid,
+  FileText
 } from 'lucide-react';
 import { Client, Project, ClientProjectState, FileVersion, NotificationLog, ClientContact, StaffMember, RequiredDocument, DocumentFileType } from '../types';
 
@@ -119,7 +121,7 @@ export default function AdminPanel({
   onResendAccessCodes
 }: AdminPanelProps) {
   // Navigation & Tabs
-  const [activeTab, setActiveTab] = useState<'clients' | 'import' | 'settings' | 'logs' | 'export-import' | 'users'>('clients');
+  const [activeTab, setActiveTab] = useState<'clients' | 'matrix' | 'import' | 'settings' | 'logs' | 'export-import' | 'users'>('clients');
 
   // New contact form (per selected client)
   const [isAddingContact, setIsAddingContact] = useState(false);
@@ -330,6 +332,7 @@ export default function AdminPanel({
   const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'missing' | 'pending-review'>('all');
 
   const selectedProject = projects.find(p => p.id === selectedProjectId) || projects[0];
+  const projectClients = clients.filter(c => c.projectId === (selectedProject?.id ?? ''));
 
   // עריכת מסמכים נדרשים בלשונית ההגדרות (לכל פרויקט)
   const FILE_TYPE_OPTIONS: { key: DocumentFileType; label: string }[] = [
@@ -763,6 +766,17 @@ export default function AdminPanel({
           >
             <Users className="w-4 h-4" />
             <span>רשימת לקוחות ומעקב</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('matrix')}
+            className={`flex items-center gap-2 px-4 py-3 rounded-lg text-sm font-bold transition-all w-full text-right cursor-pointer ${
+              activeTab === 'matrix' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+            }`}
+            id="nav-tab-matrix"
+          >
+            <LayoutGrid className="w-4 h-4" />
+            <span>מטריצת סטטוס מסמכים</span>
           </button>
 
           <button
@@ -1806,6 +1820,96 @@ export default function AdminPanel({
             </div>
           )}
 
+          {/* TAB: STATUS MATRIX (כל הלקוחות x כל המסמכים) */}
+          {activeTab === 'matrix' && (
+            <div className="space-y-6">
+              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-4">
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900 mb-1 flex items-center gap-2">
+                      <LayoutGrid className="w-5 h-5 text-indigo-600" />
+                      מטריצת סטטוס מסמכים - כל הלקוחות
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      כל עמודה היא לקוח וכל שורה מסמך נדרש - הסימון בכל תא מציג את הסטטוס של אותו מסמך אצל אותו לקוח.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => onSendBulkReminders(selectedProject.id)}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2 rounded-lg text-sm flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+                    title="שולח תזכורת במייל וב-WhatsApp לכל הלקוחות שיש להם מסמכים חסרים במחלקה זו"
+                  >
+                    <Bell className="w-4 h-4" />
+                    שליחת תזכורת ללקוחות חסרים (מייל + ווצאפ)
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-4 mb-4 text-[11px] text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                  <span className="flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> אושר</span>
+                  <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5 text-amber-500" /> ממתין לבדיקה</span>
+                  <span className="flex items-center gap-1"><XCircle className="w-3.5 h-3.5 text-rose-600" /> נפסל</span>
+                  <span className="flex items-center gap-1"><FileText className="w-3.5 h-3.5 text-slate-400" /> טיוטה (לא הוגש)</span>
+                  <span className="flex items-center gap-1"><X className="w-3.5 h-3.5 text-slate-300" /> חסר</span>
+                </div>
+
+                {!selectedProject || selectedProject.requiredDocuments.length === 0 || projectClients.length === 0 ? (
+                  <div className="text-center py-10 text-slate-400 border border-dashed border-slate-200 rounded-lg text-sm">
+                    {!selectedProject || selectedProject.requiredDocuments.length === 0
+                      ? 'אין עדיין מסמכים נדרשים מוגדרים למחלקה זו.'
+                      : 'אין עדיין לקוחות רשומים במחלקה זו.'}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                    <table className="w-full text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200">
+                          <th className="p-2.5 text-right font-bold text-slate-600 sticky right-0 bg-slate-50 z-10 min-w-[180px]">
+                            מסמך \ לקוח
+                          </th>
+                          {projectClients.map((c) => (
+                            <th key={c.id} className="p-2.5 text-center font-bold text-slate-600 min-w-[110px] whitespace-nowrap">
+                              {c.name}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {selectedProject.requiredDocuments.map((doc) => (
+                          <tr key={doc.id} className="hover:bg-slate-50/60">
+                            <td className="p-2.5 font-bold text-slate-700 sticky right-0 bg-white z-10 border-l border-slate-100 whitespace-nowrap">
+                              {doc.name}
+                              {!doc.isRequired && <span className="text-slate-400 font-normal"> (לא חובה)</span>}
+                            </td>
+                            {projectClients.map((c) => {
+                              const state = clientStates.find(s => s.clientId === c.id && s.projectId === selectedProject.id);
+                              const versions = state?.documents[doc.id] || [];
+                              const latest = versions[0];
+                              const status = latest ? latest.status : 'missing';
+                              return (
+                                <td key={c.id} className="p-2.5 text-center" title={
+                                  status === 'approved' ? 'אושר' :
+                                  status === 'pending' ? 'ממתין לבדיקה' :
+                                  status === 'rejected' ? 'נפסל' :
+                                  status === 'draft' ? 'טיוטה' : 'חסר'
+                                }>
+                                  {status === 'approved' && <CheckCircle2 className="w-4 h-4 text-emerald-600 inline-block" />}
+                                  {status === 'pending' && <Clock className="w-4 h-4 text-amber-500 inline-block" />}
+                                  {status === 'rejected' && <XCircle className="w-4 h-4 text-rose-600 inline-block" />}
+                                  {status === 'draft' && <FileText className="w-4 h-4 text-slate-400 inline-block" />}
+                                  {status === 'missing' && <X className="w-4 h-4 text-slate-300 inline-block" />}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* TAB 2: EXCEL BULK IMPORT & MANUAL ADDITION */}
           {activeTab === 'import' && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -2326,7 +2430,7 @@ export default function AdminPanel({
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1">מזהה תזכורת ה-SMS המותאם אישית</label>
+                      <label className="block text-xs font-bold text-slate-600 mb-1">נוסח תזכורת קצרה (משמש גם ל-WhatsApp וגם ל-SMS)</label>
                       <textarea
                         rows={3}
                         value={selectedProject.trackingSettings.smsTemplate}
@@ -2389,9 +2493,13 @@ export default function AdminPanel({
                               <div className="flex items-center gap-2">
                                 <span className="font-bold text-slate-900 text-sm">{log.clientName}</span>
                                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                                  log.type === 'email' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  log.type === 'email'
+                                    ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                    : log.type === 'whatsapp'
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                    : 'bg-amber-50 text-amber-700 border-amber-200'
                                 }`}>
-                                  {log.type === 'email' ? 'אימייל' : 'SMS'}
+                                  {log.type === 'email' ? 'אימייל' : log.type === 'whatsapp' ? 'ווצאפ' : 'SMS'}
                                 </span>
                                 <span className="text-slate-400 text-xs">{log.sentAt}</span>
                               </div>

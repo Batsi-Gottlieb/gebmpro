@@ -142,7 +142,7 @@ create table notification_logs (
   client_id uuid references clients (id) on delete set null,
   client_name text not null,
   project_id uuid references projects (id) on delete set null,
-  type text not null check (type in ('email', 'sms')),
+  type text not null check (type in ('email', 'sms', 'whatsapp')),
   recipient text not null,
   subject text,
   content text not null,

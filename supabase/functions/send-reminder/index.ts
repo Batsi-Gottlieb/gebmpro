@@ -8,6 +8,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { corsHeaders, handleCors } from '../_shared/cors.ts'
 import { sendMail, buildEmailHtml } from '../_shared/mailer.ts'
+import { sendWhatsApp } from '../_shared/whatsapp.ts'
 
 interface RequiredDoc {
   id: string
@@ -23,6 +24,7 @@ interface ClientRow {
   id: string
   name: string
   email: string
+  phone: string
   role: string
   send_notifications_to_manager: boolean
   access_code: string
@@ -132,14 +134,14 @@ Deno.serve(async (req: Request) => {
     if (clientId) {
       const { data: client } = await supabaseAdmin
         .from('clients')
-        .select('id, name, email, role, send_notifications_to_manager, access_code, receives_notifications')
+        .select('id, name, email, phone, role, send_notifications_to_manager, access_code, receives_notifications')
         .eq('id', clientId)
         .single()
       if (client) clientsToNotify = [client]
     } else {
       const { data: clients } = await supabaseAdmin
         .from('clients')
-        .select('id, name, email, role, send_notifications_to_manager, access_code, receives_notifications')
+        .select('id, name, email, phone, role, send_notifications_to_manager, access_code, receives_notifications')
         .eq('project_id', projectId)
       clientsToNotify = (clients ?? []).filter(
         (c) => c.role !== 'manager' || c.send_notifications_to_manager
@@ -171,23 +173,36 @@ Deno.serve(async (req: Request) => {
         missingDocuments: missingStr,
         appUrl,
       })
+      // הודעת ה-WhatsApp מבוססת על תבנית ה-SMS של הפרויקט (טקסט קצר, בלי HTML)
+      const whatsappBody = renderTemplate(project.sms_template, {
+        clientName: client.name,
+        projectName: project.name,
+        accessCode: client.access_code,
+        missingDocuments: missingStr,
+        appUrl,
+      })
 
       // בונים רשימת נמענים: הלקוח הראשי (אם לא ביטל התראות) + כל אנשי הקשר
       // הנוספים שלו שמוגדרים לקבל התראות (client_contacts.receives_notifications)
       const recipientEmails: string[] = []
+      const recipientPhones: string[] = []
       if (client.receives_notifications && client.email) {
         recipientEmails.push(client.email)
       }
+      if (client.receives_notifications && client.phone) {
+        recipientPhones.push(client.phone)
+      }
       const { data: contacts } = await supabaseAdmin
         .from('client_contacts')
-        .select('email, receives_notifications')
+        .select('email, phone, receives_notifications')
         .eq('client_id', client.id)
         .eq('receives_notifications', true)
       for (const contact of contacts ?? []) {
         if (contact.email) recipientEmails.push(contact.email)
+        if (contact.phone) recipientPhones.push(contact.phone)
       }
 
-      if (recipientEmails.length === 0) {
+      if (recipientEmails.length === 0 && recipientPhones.length === 0) {
         results.push({ clientId: client.id, status: 'skipped' })
         continue
       }
@@ -207,6 +222,22 @@ Deno.serve(async (req: Request) => {
           content: body,
           status: mailResult.ok ? 'sent' : 'failed',
           error_message: mailResult.ok ? null : mailResult.error ?? null,
+        })
+      }
+
+      for (const recipientPhone of recipientPhones) {
+        const waResult = await sendWhatsApp(recipientPhone, whatsappBody)
+        if (waResult.ok) anySent = true
+
+        await supabaseAdmin.from('notification_logs').insert({
+          client_id: client.id,
+          client_name: client.name,
+          project_id: projectId,
+          type: 'whatsapp',
+          recipient: recipientPhone,
+          content: whatsappBody,
+          status: waResult.ok ? 'sent' : 'failed',
+          error_message: waResult.ok ? null : waResult.error ?? null,
         })
       }
 
