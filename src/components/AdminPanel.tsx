@@ -111,6 +111,62 @@ export default function AdminPanel({
   
   // Client selection for CPA Review Workflow
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+
+  // ערוך פרטי לקוח קיים (שם/מייל/נייד/סוג/הערות)
+  const [editingClientId, setEditingClientId] = useState<string | null>(null);
+  const [editClientName, setEditClientName] = useState('');
+  const [editClientEmail, setEditClientEmail] = useState('');
+  const [editClientPhone, setEditClientPhone] = useState('');
+  const [editClientRole, setEditClientRole] = useState<'manager' | 'regular'>('regular');
+  const [editClientSendNotifications, setEditClientSendNotifications] = useState(true);
+  const [editClientNotes, setEditClientNotes] = useState('');
+
+  const startEditingClient = (c: Client) => {
+    setEditingClientId(c.id);
+    setEditClientName(c.name);
+    setEditClientEmail(c.email);
+    setEditClientPhone(c.phone);
+    setEditClientRole(c.role === 'manager' ? 'manager' : 'regular');
+    setEditClientSendNotifications(!!c.sendNotificationsToManager);
+    setEditClientNotes(c.notes || '');
+  };
+
+  const handleSaveClientEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingClientId || !editClientName || !editClientEmail || !editClientPhone) return;
+    onUpdateClient(editingClientId, {
+      name: editClientName,
+      email: editClientEmail,
+      phone: editClientPhone,
+      role: editClientRole,
+      sendNotificationsToManager: editClientSendNotifications,
+      notes: editClientNotes,
+    });
+    setEditingClientId(null);
+  };
+
+  // ערוך איש קשר נוסף קיים (שם/מייל/נייד)
+  const [editingContactId, setEditingContactId] = useState<string | null>(null);
+  const [editContactName, setEditContactName] = useState('');
+  const [editContactEmail, setEditContactEmail] = useState('');
+  const [editContactPhone, setEditContactPhone] = useState('');
+
+  const startEditingContact = (cc: ClientContact) => {
+    setEditingContactId(cc.id);
+    setEditContactName(cc.name);
+    setEditContactEmail(cc.email || '');
+    setEditContactPhone(cc.phone || '');
+  };
+
+  const handleSaveContactEdit = (contactId: string) => {
+    if (!editContactName) return;
+    onUpdateClientContact(contactId, {
+      name: editContactName,
+      email: editContactEmail || undefined,
+      phone: editContactPhone || undefined,
+    });
+    setEditingContactId(null);
+  };
   const [selectedClientIds, setSelectedClientIds] = useState<Set<string>>(new Set());
 
   const toggleClientSelection = (clientId: string) => {
@@ -923,6 +979,15 @@ export default function AdminPanel({
 
                                   <button
                                     type="button"
+                                    onClick={() => startEditingClient(c)}
+                                    className="bg-slate-100 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 p-1.5 rounded-lg border border-slate-200 cursor-pointer"
+                                    title="ערוך פרטי לקוח"
+                                  >
+                                    <Edit className="w-3.5 h-3.5" />
+                                  </button>
+
+                                  <button
+                                    type="button"
                                     onClick={() => onDeleteClient(c.id)}
                                     className="bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 p-1.5 rounded-lg border border-slate-200 cursor-pointer"
                                     title="מחק לקוח"
@@ -938,6 +1003,113 @@ export default function AdminPanel({
                   </table>
                 </div>
               </div>
+
+              {/* Edit Client Inline Modal */}
+              <AnimatePresence>
+                {editingClientId && (() => {
+                  const editingClient = clients.find(c => c.id === editingClientId);
+                  if (!editingClient) return null;
+                  return (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="bg-white p-6 rounded-xl border border-indigo-200 shadow-sm"
+                    >
+                      <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+                        <Edit className="w-5 h-5 text-indigo-600" />
+                        עריכת פרטי לקוח: {editingClient.name}
+                      </h3>
+                      <form onSubmit={handleSaveClientEdit} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-500 mb-1">שם הלקוח (חברה/רשות/עמותה) *</label>
+                          <input
+                            type="text"
+                            required
+                            value={editClientName}
+                            onChange={(e) => setEditClientName(e.target.value)}
+                            className="w-full bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-2 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-500 mb-1">כתובת אימייל *</label>
+                          <input
+                            type="email"
+                            required
+                            value={editClientEmail}
+                            onChange={(e) => setEditClientEmail(e.target.value)}
+                            className="w-full bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-2 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-500 mb-1">מספר טלפון *</label>
+                          <input
+                            type="text"
+                            required
+                            value={editClientPhone}
+                            onChange={(e) => setEditClientPhone(e.target.value)}
+                            className="w-full bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-2 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-500 mb-1">סוג לקוח</label>
+                          <select
+                            value={editClientRole}
+                            onChange={(e: any) => setEditClientRole(e.target.value)}
+                            className="w-full bg-slate-50 text-slate-850 border border-slate-200 rounded-lg p-2 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                          >
+                            <option value="regular">לקוח רגיל (מקבל התראות)</option>
+                            <option value="manager">לקוח-מנהל</option>
+                          </select>
+                        </div>
+
+                        {editClientRole === 'manager' && (
+                          <div>
+                            <label className="block text-xs font-bold text-slate-500 mb-1">האם לשלוח התראות למנהל זה?</label>
+                            <div className="flex items-center gap-2 mt-2">
+                              <input
+                                type="checkbox"
+                                checked={editClientSendNotifications}
+                                onChange={(e) => setEditClientSendNotifications(e.target.checked)}
+                                className="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
+                                id="check-edit-client-notify"
+                              />
+                              <span className="text-sm font-medium text-slate-700">כן, שלח התראות למייל זה</span>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="md:col-span-3">
+                          <label className="block text-xs font-bold text-slate-500 mb-1">הערות / דגשים מיוחדים לשליחה</label>
+                          <textarea
+                            rows={2}
+                            value={editClientNotes}
+                            onChange={(e) => setEditClientNotes(e.target.value)}
+                            placeholder="לדוגמה: נא לא לשלוח התראות בימי שלישי..."
+                            className="w-full bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                          />
+                        </div>
+
+                        <div className="md:col-span-3 flex justify-end gap-2 mt-2">
+                          <button
+                            type="button"
+                            onClick={() => setEditingClientId(null)}
+                            className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-2 rounded-lg text-sm transition-colors cursor-pointer"
+                          >
+                            ביטול
+                          </button>
+                          <button
+                            type="submit"
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 py-2 rounded-lg text-sm transition-colors cursor-pointer"
+                          >
+                            שמור שינויים
+                          </button>
+                        </div>
+                      </form>
+                    </motion.div>
+                  );
+                })()}
+              </AnimatePresence>
 
               {/* SECTION: CPA REVIEW WORKFLOW PANEL FOR SELECTED CLIENT */}
               <AnimatePresence>
@@ -1078,6 +1250,47 @@ export default function AdminPanel({
                           ) : (
                             <div className="space-y-1.5">
                               {clientContacts.filter(cc => cc.clientId === client.id).map(cc => (
+                                editingContactId === cc.id ? (
+                                  <div key={cc.id} className="grid grid-cols-1 md:grid-cols-4 gap-2 bg-white p-2 rounded-lg border border-indigo-200 text-xs">
+                                    <input
+                                      type="text"
+                                      placeholder="שם *"
+                                      value={editContactName}
+                                      onChange={(e) => setEditContactName(e.target.value)}
+                                      className="bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                                    />
+                                    <input
+                                      type="email"
+                                      placeholder="אימייל"
+                                      value={editContactEmail}
+                                      onChange={(e) => setEditContactEmail(e.target.value)}
+                                      className="bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                                    />
+                                    <input
+                                      type="text"
+                                      placeholder="נייד"
+                                      value={editContactPhone}
+                                      onChange={(e) => setEditContactPhone(e.target.value)}
+                                      className="bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-2 text-xs font-mono focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                                    />
+                                    <div className="flex items-center gap-1.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleSaveContactEdit(cc.id)}
+                                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition-colors cursor-pointer"
+                                      >
+                                        שמור
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setEditingContactId(null)}
+                                        className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-3 py-1.5 rounded-lg text-xs transition-colors cursor-pointer"
+                                      >
+                                        ביטול
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
                                 <div key={cc.id} className="flex justify-between items-center bg-white p-2 rounded-lg border border-slate-200 text-xs">
                                   <div>
                                     <span className="font-bold text-slate-800">{cc.name}</span>
@@ -1098,6 +1311,13 @@ export default function AdminPanel({
                                       {cc.receivesNotifications ? 'מקבל התראות' : 'לא מקבל'}
                                     </button>
                                     <button
+                                      onClick={() => startEditingContact(cc)}
+                                      className="bg-slate-100 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 p-1 rounded-lg border border-slate-200 cursor-pointer"
+                                      title="ערוך איש קשר"
+                                    >
+                                      <Edit className="w-3 h-3" />
+                                    </button>
+                                    <button
                                       onClick={() => onDeleteClientContact(cc.id)}
                                       className="bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 p-1 rounded-lg border border-slate-200 cursor-pointer"
                                     >
@@ -1105,6 +1325,7 @@ export default function AdminPanel({
                                     </button>
                                   </div>
                                 </div>
+                                )
                               ))}
                             </div>
                           )}
