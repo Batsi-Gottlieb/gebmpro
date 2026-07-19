@@ -8,6 +8,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts'
 import { corsHeaders, handleCors } from '../_shared/cors.ts'
+import { withTimeout } from '../_shared/withTimeout.ts'
 
 interface RequiredDoc {
   id: string
@@ -211,12 +212,16 @@ Deno.serve(async (req: Request) => {
         let errorMessage: string | null = null
 
         try {
-          await smtpClient.send({
-            from: Deno.env.get('SMTP_FROM')!,
-            to: recipientEmail,
-            subject,
-            content: body,
-          })
+          await withTimeout(
+            smtpClient.send({
+              from: Deno.env.get('SMTP_FROM')!,
+              to: recipientEmail,
+              subject,
+              content: body,
+            }),
+            8000,
+            'שליחת מייל (SMTP)'
+          )
           anySent = true
         } catch (sendErr) {
           status = 'failed'
@@ -239,7 +244,11 @@ Deno.serve(async (req: Request) => {
       results.push({ clientId: client.id, status: anySent ? 'sent' : 'failed' })
     }
 
-    await smtpClient.close()
+    try {
+      await withTimeout(smtpClient.close(), 3000, 'סגירת חיבור SMTP')
+    } catch {
+      // מתעלמים - זה רק ניקוי חיבור
+    }
 
     return new Response(JSON.stringify({ results }), {
       status: 200,

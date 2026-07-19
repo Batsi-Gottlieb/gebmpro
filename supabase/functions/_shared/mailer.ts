@@ -1,8 +1,9 @@
-// עוזר משותף לשליחת מייל (SMTP) - משמש create-client / import-clients
-// לשליחת קוד הגישה של לקוח חדש, ואפשר גם ל-send-reminder בעתיד.
+// עוזר משותף לשליחת מייל (SMTP) - משמש create-client / import-clients /
+// create-staff / add-client-contact / resend-access-code.
 // דורש את ה-Secrets: SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM
 
 import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts'
+import { withTimeout } from './withTimeout.ts'
 
 export async function sendMail(
   to: string,
@@ -22,17 +23,28 @@ export async function sendMail(
   })
 
   try {
-    await smtpClient.send({
-      from: Deno.env.get('SMTP_FROM')!,
-      to,
-      subject,
-      content,
-    })
+    await withTimeout(
+      smtpClient.send({
+        from: Deno.env.get('SMTP_FROM')!,
+        to,
+        subject,
+        content,
+      }),
+      8000,
+      'שליחת מייל (SMTP)'
+    )
     return { ok: true }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : 'שגיאת שליחה' }
   } finally {
-    await smtpClient.close()
+    // סוגרים את החיבור בצורה בטוחה (עם timeout משלה) - אם השליחה נכשלה
+    // או נתקעה, close() עלול לזרוק שגיאה משלו ולהקריס את כל הפונקציה
+    // (500 / net::ERR_FAILED) במקום להחזיר תשובה מבוקרת.
+    try {
+      await withTimeout(smtpClient.close(), 3000, 'סגירת חיבור SMTP')
+    } catch {
+      // מתעלמים - זה רק ניקוי חיבור, לא צריך להשפיע על תוצאת השליחה
+    }
   }
 }
 
