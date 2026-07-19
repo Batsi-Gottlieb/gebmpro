@@ -436,9 +436,11 @@ export default function AdminPanel({
       {/* Top Admin Header */}
       <header className="bg-white border-b border-slate-200 px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-white text-lg">
-            גב
-          </div>
+          <img
+            src="/logo.png"
+            alt="גוטליב את ביטון"
+            className="w-10 h-10 rounded-lg object-contain bg-white border border-slate-200 p-0.5"
+          />
           <div>
             <h1 className="text-xl font-bold tracking-tight text-slate-900">מערכת ניהול - גוטליב את ביטון</h1>
             <p className="text-xs text-slate-500">מעקב, הגשות וסנכרון חומרי לקוחות עבור רואה חשבון</p>

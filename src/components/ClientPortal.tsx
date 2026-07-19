@@ -116,9 +116,11 @@ export default function ClientPortal({
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-white text-lg">
-              גב
-            </div>
+            <img
+              src="/logo.png"
+              alt="גוטליב את ביטון"
+              className="w-10 h-10 rounded-lg object-contain bg-white border border-slate-200 p-0.5"
+            />
             <div>
               <h1 className="text-xl font-bold tracking-tight text-slate-900">גוטליב את ביטון רואי חשבון</h1>
               <p className="text-xs text-slate-500">פורטל לקוחות חכם למעקב והעלאת מסמכים</p>

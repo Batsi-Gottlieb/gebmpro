@@ -614,9 +614,11 @@ export default function App() {
               className="bg-white rounded-2xl border border-slate-200 shadow-md p-6 md:p-8 w-full max-w-md space-y-6 text-slate-900"
             >
               <div className="text-center space-y-2">
-                <div className="w-14 h-14 rounded-2xl bg-indigo-600 flex items-center justify-center font-bold text-white text-2xl mx-auto shadow-sm">
-                  גב
-                </div>
+                <img
+                  src="/logo.png"
+                  alt="גוטליב את ביטון"
+                  className="w-14 h-14 rounded-2xl object-contain bg-white border border-slate-200 shadow-sm mx-auto p-1"
+                />
                 <h2 className="text-xl font-bold tracking-tight text-slate-900 md:text-2xl">גוטליב את ביטון</h2>
                 <p className="text-xs text-slate-500">משרד רואי חשבון • פורטל הגשת מסמכים חכם</p>
               </div>

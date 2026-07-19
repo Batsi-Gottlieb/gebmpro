@@ -7,7 +7,7 @@
 
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { corsHeaders, handleCors } from '../_shared/cors.ts'
-import { sendMail } from '../_shared/mailer.ts'
+import { sendMail, buildEmailHtml } from '../_shared/mailer.ts'
 
 Deno.serve(async (req: Request) => {
   const cors = handleCors(req)
@@ -102,7 +102,7 @@ Deno.serve(async (req: Request) => {
         `נוצר לך חשבון ניהול במערכת מסמכים - גוטליב את ביטון.\n` +
         `להגדרת סיסמה וכניסה ראשונה, לחץ/י על הקישור הבא:\n${linkData.properties.action_link}\n\n` +
         `הקישור תקף לזמן מוגבל.`
-      const mailResult = await sendMail(email, 'הזמנה לניהול המערכת', body)
+      const mailResult = await sendMail(email, 'הזמנה לניהול המערכת', body, buildEmailHtml(body, appUrl))
       emailSent = mailResult.ok
     }
 

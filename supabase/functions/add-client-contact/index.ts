@@ -6,7 +6,7 @@
 
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { corsHeaders, handleCors } from '../_shared/cors.ts'
-import { sendMail, buildWelcomeEmail } from '../_shared/mailer.ts'
+import { sendMail, buildWelcomeEmail, buildEmailHtml } from '../_shared/mailer.ts'
 import { sendSms, buildWelcomeSms } from '../_shared/sms.ts'
 
 Deno.serve(async (req: Request) => {
@@ -96,7 +96,7 @@ Deno.serve(async (req: Request) => {
 
     if (email) {
       const emailBody = buildWelcomeEmail(name, client.access_code, appUrl)
-      const mailResult = await sendMail(email, 'פרטי כניסה לפורטל המסמכים', emailBody)
+      const mailResult = await sendMail(email, 'פרטי כניסה לפורטל המסמכים', emailBody, buildEmailHtml(emailBody, appUrl))
       emailSent = mailResult.ok
       await supabaseAdmin.from('notification_logs').insert({
         client_id: clientId,

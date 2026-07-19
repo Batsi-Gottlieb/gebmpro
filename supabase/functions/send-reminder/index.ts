@@ -7,7 +7,7 @@
 
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { corsHeaders, handleCors } from '../_shared/cors.ts'
-import { sendMail } from '../_shared/mailer.ts'
+import { sendMail, buildEmailHtml } from '../_shared/mailer.ts'
 
 interface RequiredDoc {
   id: string
@@ -194,7 +194,7 @@ Deno.serve(async (req: Request) => {
 
       let anySent = false
       for (const recipientEmail of recipientEmails) {
-        const mailResult = await sendMail(recipientEmail, subject, body)
+        const mailResult = await sendMail(recipientEmail, subject, body, buildEmailHtml(body, appUrl))
         if (mailResult.ok) anySent = true
 
         await supabaseAdmin.from('notification_logs').insert({
