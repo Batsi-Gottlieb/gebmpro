@@ -56,6 +56,14 @@ interface AdminPanelProps {
   onSendManualReminder: (clientId: string, projectId: string) => void;
   onSendBulkReminders: (projectId: string) => void;
   onUpdateProjectSettings: (projectId: string, settings: Partial<Project['trackingSettings']>) => void;
+  onAddProject: (project: {
+    name: string;
+    description?: string;
+    reminderIntervalDays: number;
+    emailTemplate: string;
+    smsTemplate: string;
+    requiredDocuments: { name: string; description?: string; isRequired: boolean }[];
+  }) => void;
   onExportData: () => void;
   onImportData: (jsonStr: string) => boolean;
   onImpersonate: (accessCode: string) => void;
@@ -83,6 +91,7 @@ export default function AdminPanel({
   onSendManualReminder,
   onSendBulkReminders,
   onUpdateProjectSettings,
+  onAddProject,
   onExportData,
   onImportData,
   onImpersonate,
@@ -108,6 +117,55 @@ export default function AdminPanel({
   const [newStaffName, setNewStaffName] = useState('');
   const [newStaffEmail, setNewStaffEmail] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState<string>(projects[0]?.id || 'nitzanim-2026');
+
+  // יצירת מחלקה/פרויקט חדש
+  const [isAddingProject, setIsAddingProject] = useState(false);
+  const [newProjectName, setNewProjectName] = useState('');
+  const [newProjectDescription, setNewProjectDescription] = useState('');
+  const [newProjectReminderDays, setNewProjectReminderDays] = useState(3);
+  const [newProjectEmailTemplate, setNewProjectEmailTemplate] = useState(
+    'שלום {clientName},\n\nבבדיקת המערכת נמצאו המסמכים החסרים הבאים לפרויקט {projectName}:\n{missingDocuments}\n\nקוד הגישה שלך: {accessCode}\nלכניסה לפורטל: {appUrl}'
+  );
+  const [newProjectSmsTemplate, setNewProjectSmsTemplate] = useState(
+    'שלום {clientName}, נא להשלים מסמכים חסרים לפרויקט {projectName}. קוד גישה: {accessCode}'
+  );
+  const [newProjectDocuments, setNewProjectDocuments] = useState<{ name: string; description: string; isRequired: boolean }[]>([]);
+  const [newProjectDocDraftName, setNewProjectDocDraftName] = useState('');
+  const [newProjectDocDraftDescription, setNewProjectDocDraftDescription] = useState('');
+  const [newProjectDocDraftRequired, setNewProjectDocDraftRequired] = useState(true);
+
+  const resetNewProjectForm = () => {
+    setNewProjectName('');
+    setNewProjectDescription('');
+    setNewProjectReminderDays(3);
+    setNewProjectEmailTemplate(
+      'שלום {clientName},\n\nבבדיקת המערכת נמצאו המסמכים החסרים הבאים לפרויקט {projectName}:\n{missingDocuments}\n\nקוד הגישה שלך: {accessCode}\nלכניסה לפורטל: {appUrl}'
+    );
+    setNewProjectSmsTemplate('שלום {clientName}, נא להשלים מסמכים חסרים לפרויקט {projectName}. קוד גישה: {accessCode}');
+    setNewProjectDocuments([]);
+    setNewProjectDocDraftName('');
+    setNewProjectDocDraftDescription('');
+    setNewProjectDocDraftRequired(true);
+  };
+
+  const handleCreateProject = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProjectName) return;
+    onAddProject({
+      name: newProjectName,
+      description: newProjectDescription || undefined,
+      reminderIntervalDays: newProjectReminderDays,
+      emailTemplate: newProjectEmailTemplate,
+      smsTemplate: newProjectSmsTemplate,
+      requiredDocuments: newProjectDocuments.map((d) => ({
+        name: d.name,
+        description: d.description || undefined,
+        isRequired: d.isRequired,
+      })),
+    });
+    resetNewProjectForm();
+    setIsAddingProject(false);
+  };
   
   // Client selection for CPA Review Workflow
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
@@ -404,8 +462,185 @@ export default function AdminPanel({
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
+          <button
+            type="button"
+            onClick={() => setIsAddingProject(!isAddingProject)}
+            className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold p-1.5 rounded-lg border border-indigo-200 cursor-pointer"
+            title="הוספת מחלקה/פרויקט חדש"
+            id="btn-add-project"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
         </div>
       </header>
+
+      {/* Add Department/Project Panel */}
+      <AnimatePresence>
+        {isAddingProject && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="bg-white border-b border-slate-200 px-6 py-6 overflow-hidden"
+          >
+            <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+              <Folder className="w-5 h-5 text-indigo-600" />
+              יצירת מחלקה/פרויקט חדש
+            </h3>
+            <form onSubmit={handleCreateProject} className="space-y-4 max-w-4xl">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1">שם המחלקה/פרויקט *</label>
+                  <input
+                    type="text"
+                    required
+                    value={newProjectName}
+                    onChange={(e) => setNewProjectName(e.target.value)}
+                    placeholder="לדוגמה: תב״רים 2027"
+                    className="w-full bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-2 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1">תדירות תזכורות (ימים)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={newProjectReminderDays}
+                    onChange={(e) => setNewProjectReminderDays(Number(e.target.value) || 1)}
+                    className="w-full bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-2 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1">תיאור (אופציונלי)</label>
+                  <input
+                    type="text"
+                    value={newProjectDescription}
+                    onChange={(e) => setNewProjectDescription(e.target.value)}
+                    className="w-full bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-2 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1">תבנית מייל לתזכורת</label>
+                  <textarea
+                    rows={4}
+                    value={newProjectEmailTemplate}
+                    onChange={(e) => setNewProjectEmailTemplate(e.target.value)}
+                    className="w-full bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-2.5 text-xs font-mono focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">משתנים: {'{clientName} {projectName} {accessCode} {missingDocuments} {appUrl}'}</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1">תבנית SMS לתזכורת</label>
+                  <textarea
+                    rows={4}
+                    value={newProjectSmsTemplate}
+                    onChange={(e) => setNewProjectSmsTemplate(e.target.value)}
+                    className="w-full bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-2.5 text-xs font-mono focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">משתנים: {'{clientName} {projectName} {accessCode} {missingDocuments} {appUrl}'}</p>
+                </div>
+              </div>
+
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                <h4 className="font-bold text-slate-800 text-sm flex items-center gap-1.5 mb-1">
+                  <FileSpreadsheet className="w-4 h-4 text-indigo-600" />
+                  מסמכים נדרשים ({newProjectDocuments.length})
+                </h4>
+                <p className="text-[11px] text-slate-500 mb-3">רשימת המסמכים שכל לקוח בפרויקט הזה יצטרך להעלות. אפשר להוסיף/למחוק מסמכים גם אחר כך.</p>
+
+                {newProjectDocuments.length > 0 && (
+                  <div className="space-y-1.5 mb-3">
+                    {newProjectDocuments.map((doc, idx) => (
+                      <div key={idx} className="flex justify-between items-center bg-white p-2 rounded-lg border border-slate-200 text-xs">
+                        <div>
+                          <span className="font-bold text-slate-800">{doc.name}</span>
+                          {doc.description && <span className="text-slate-500 mr-2"> • {doc.description}</span>}
+                          <span className={`mr-2 font-bold ${doc.isRequired ? 'text-emerald-600' : 'text-slate-400'}`}>
+                            {doc.isRequired ? 'חובה' : 'לא חובה'}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setNewProjectDocuments(prev => prev.filter((_, i) => i !== idx))}
+                          className="text-rose-500 hover:text-rose-700 cursor-pointer"
+                          title="הסר"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-2 bg-white p-3 rounded-lg border border-slate-200">
+                  <input
+                    type="text"
+                    placeholder="שם המסמך *"
+                    value={newProjectDocDraftName}
+                    onChange={(e) => setNewProjectDocDraftName(e.target.value)}
+                    className="bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                  />
+                  <input
+                    type="text"
+                    placeholder="תיאור (לא חובה)"
+                    value={newProjectDocDraftDescription}
+                    onChange={(e) => setNewProjectDocDraftDescription(e.target.value)}
+                    className="bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                  />
+                  <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={newProjectDocDraftRequired}
+                      onChange={(e) => setNewProjectDocDraftRequired(e.target.checked)}
+                      className="w-3.5 h-3.5 accent-indigo-600 rounded cursor-pointer"
+                    />
+                    מסמך חובה
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!newProjectDocDraftName) return;
+                      setNewProjectDocuments(prev => [...prev, {
+                        name: newProjectDocDraftName,
+                        description: newProjectDocDraftDescription,
+                        isRequired: newProjectDocDraftRequired,
+                      }]);
+                      setNewProjectDocDraftName('');
+                      setNewProjectDocDraftDescription('');
+                      setNewProjectDocDraftRequired(true);
+                    }}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition-colors cursor-pointer whitespace-nowrap"
+                  >
+                    + הוספה לרשימה
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetNewProjectForm();
+                    setIsAddingProject(false);
+                  }}
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-2 rounded-lg text-sm transition-colors cursor-pointer"
+                >
+                  ביטול
+                </button>
+                <button
+                  type="submit"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-5 py-2 rounded-lg text-sm transition-colors cursor-pointer"
+                >
+                  שמור מחלקה/פרויקט
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Main Admin layout */}
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">

@@ -460,6 +460,24 @@ export default function App() {
     }
   };
 
+  // ---------- יצירת מחלקה/פרויקט חדש ----------
+  const handleAddProject = async (project: {
+    name: string;
+    description?: string;
+    reminderIntervalDays: number;
+    emailTemplate: string;
+    smsTemplate: string;
+    requiredDocuments: { name: string; description?: string; isRequired: boolean }[];
+  }) => {
+    try {
+      const created = await api.addProject(project);
+      await loadAdminData();
+      showAlert(`המחלקה "${created.name}" נוצרה בהצלחה עם ${created.requiredDocuments.length} מסמכים נדרשים.`);
+    } catch (err) {
+      showAlert(err instanceof Error ? err.message : 'שגיאה ביצירת המחלקה', 'error');
+    }
+  };
+
   const handleExportData = () => {
     const fullState = {
       exportedAt: new Date().toISOString(),
@@ -789,6 +807,7 @@ export default function App() {
             onSendManualReminder={handleSendManualReminder}
             onSendBulkReminders={handleSendBulkReminders}
             onUpdateProjectSettings={handleUpdateProjectSettings}
+            onAddProject={handleAddProject}
             onExportData={handleExportData}
             onImportData={handleImportData}
             onImpersonate={handleImpersonate}

@@ -520,3 +520,50 @@ export async function resendAccessCodes(
   if (!res.ok) throw new Error(data.error || 'שגיאה בשליחה חוזרת של קוד הגישה');
   return data;
 }
+
+// יצירת מחלקה/פרויקט חדש עם כל ההגדרות (תבניות התראה, תדירות תזכורות)
+// ורשימת המסמכים הנדרשים הראשונית שלו.
+export async function addProject(project: {
+  name: string;
+  description?: string;
+  reminderIntervalDays: number;
+  emailTemplate: string;
+  smsTemplate: string;
+  requiredDocuments: { name: string; description?: string; isRequired: boolean }[];
+}): Promise<Project> {
+  const { data: newProject, error: insertError } = await supabase
+    .from('projects')
+    .insert({
+      name: project.name,
+      description: project.description || null,
+      reminder_interval_days: project.reminderIntervalDays,
+      email_template: project.emailTemplate,
+      sms_template: project.smsTemplate,
+    })
+    .select()
+    .single();
+
+  if (insertError || !newProject) throw insertError ?? new Error('שגיאה ביצירת המחלקה');
+
+  const docsToInsert = project.requiredDocuments
+    .filter((d) => d.name)
+    .map((d, idx) => ({
+      project_id: newProject.id,
+      name: d.name,
+      description: d.description || null,
+      is_required: d.isRequired,
+      sort_order: idx,
+    }));
+
+  let insertedDocs: any[] = [];
+  if (docsToInsert.length > 0) {
+    const { data: docsData, error: docsError } = await supabase
+      .from('required_documents')
+      .insert(docsToInsert)
+      .select();
+    if (docsError) throw docsError;
+    insertedDocs = docsData ?? [];
+  }
+
+  return mapProjectRow(newProject, insertedDocs);
+}
