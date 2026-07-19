@@ -70,7 +70,8 @@ interface AdminPanelProps {
   onAddClientContact: (clientId: string, contact: { name: string; email?: string; phone?: string; receivesNotifications: boolean }) => void;
   onUpdateClientContact: (contactId: string, updates: Partial<Pick<ClientContact, 'name' | 'email' | 'phone' | 'receivesNotifications'>>) => void;
   onDeleteClientContact: (contactId: string) => void;
-  onAddStaff: (fullName: string, email: string) => void;
+  onAddStaff: (fullName: string, email: string, password: string) => void;
+  onUpdateStaff: (staffId: string, updates: { fullName?: string; email?: string; password?: string }) => void;
   onRemoveStaff: (staffId: string) => void;
   onResendAccessCodes: (clientIds: string[]) => void;
 }
@@ -99,6 +100,7 @@ export default function AdminPanel({
   onUpdateClientContact,
   onDeleteClientContact,
   onAddStaff,
+  onUpdateStaff,
   onRemoveStaff,
   onResendAccessCodes
 }: AdminPanelProps) {
@@ -116,6 +118,32 @@ export default function AdminPanel({
   const [isAddingStaff, setIsAddingStaff] = useState(false);
   const [newStaffName, setNewStaffName] = useState('');
   const [newStaffEmail, setNewStaffEmail] = useState('');
+  const [newStaffPassword, setNewStaffPassword] = useState('');
+
+  // ערוך איש צוות קיים (שם/מייל/סיסמה)
+  const [editingStaffId, setEditingStaffId] = useState<string | null>(null);
+  const [editStaffFullName, setEditStaffFullName] = useState('');
+  const [editStaffEmail, setEditStaffEmail] = useState('');
+  const [editStaffPassword, setEditStaffPassword] = useState('');
+
+  const startEditingStaff = (s: StaffMember) => {
+    setEditingStaffId(s.id);
+    setEditStaffFullName(s.fullName);
+    setEditStaffEmail(s.email);
+    setEditStaffPassword('');
+  };
+
+  const handleSaveStaffEdit = (staffId: string) => {
+    if (!editStaffFullName || !editStaffEmail) return;
+    if (editStaffPassword && editStaffPassword.length < 6) return;
+    onUpdateStaff(staffId, {
+      fullName: editStaffFullName,
+      email: editStaffEmail,
+      ...(editStaffPassword ? { password: editStaffPassword } : {}),
+    });
+    setEditingStaffId(null);
+    setEditStaffPassword('');
+  };
   const [selectedProjectId, setSelectedProjectId] = useState<string>(projects[0]?.id || 'nitzanim-2026');
 
   // יצירת מחלקה/פרויקט חדש
@@ -2206,13 +2234,15 @@ export default function AdminPanel({
                       <form
                         onSubmit={(e) => {
                           e.preventDefault();
-                          if (!newStaffName || !newStaffEmail) return;
-                          onAddStaff(newStaffName, newStaffEmail);
+                          if (!newStaffName || !newStaffEmail || !newStaffPassword) return;
+                          if (newStaffPassword.length < 6) return;
+                          onAddStaff(newStaffName, newStaffEmail, newStaffPassword);
                           setNewStaffName('');
                           setNewStaffEmail('');
+                          setNewStaffPassword('');
                           setIsAddingStaff(false);
                         }}
-                        className="grid grid-cols-1 md:grid-cols-3 gap-3"
+                        className="grid grid-cols-1 md:grid-cols-4 gap-3"
                       >
                         <div>
                           <label className="block text-xs font-bold text-slate-500 mb-1">שם מלא *</label>
@@ -2234,6 +2264,17 @@ export default function AdminPanel({
                             className="w-full bg-white text-slate-900 border border-slate-200 rounded-lg p-2 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                           />
                         </div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-500 mb-1">סיסמה * (6 תווים לפחות)</label>
+                          <input
+                            type="text"
+                            required
+                            minLength={6}
+                            value={newStaffPassword}
+                            onChange={(e) => setNewStaffPassword(e.target.value)}
+                            className="w-full bg-white text-slate-900 border border-slate-200 rounded-lg p-2 text-sm font-mono focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                          />
+                        </div>
                         <div className="flex items-end gap-2">
                           <button
                             type="button"
@@ -2251,7 +2292,7 @@ export default function AdminPanel({
                         </div>
                       </form>
                       <p className="text-[10px] text-slate-500 mt-2">
-                        ישלח לאיש הצוות מייל עם קישור להגדרת סיסמה וכניסה ראשונה.
+                        איש הצוות יוכל להתחבר לפאנל הניהול עם האימייל והסיסמה שהוגדרו כאן - לא יישלח אליו מייל.
                       </p>
                     </motion.div>
                   )}
@@ -2264,19 +2305,73 @@ export default function AdminPanel({
                     </div>
                   ) : (
                     staff.map((s) => (
-                      <div key={s.id} className="py-3 flex justify-between items-center">
-                        <div>
-                          <div className="font-bold text-slate-900 text-sm">{s.fullName}</div>
-                          <div className="text-xs text-slate-500">{s.email}</div>
+                      editingStaffId === s.id ? (
+                        <div key={s.id} className="py-3 bg-slate-50 rounded-lg border border-indigo-200 p-3">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-2">
+                            <input
+                              type="text"
+                              placeholder="שם מלא *"
+                              value={editStaffFullName}
+                              onChange={(e) => setEditStaffFullName(e.target.value)}
+                              className="bg-white text-slate-900 border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                            />
+                            <input
+                              type="email"
+                              placeholder="אימייל *"
+                              value={editStaffEmail}
+                              onChange={(e) => setEditStaffEmail(e.target.value)}
+                              className="bg-white text-slate-900 border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                            />
+                            <input
+                              type="text"
+                              placeholder="סיסמה חדשה (השאר ריק כדי לא לשנות)"
+                              value={editStaffPassword}
+                              onChange={(e) => setEditStaffPassword(e.target.value)}
+                              minLength={6}
+                              className="bg-white text-slate-900 border border-slate-200 rounded-lg p-2 text-xs font-mono focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                            />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleSaveStaffEdit(s.id)}
+                              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition-colors cursor-pointer"
+                            >
+                              שמור
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingStaffId(null)}
+                              className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-3 py-1.5 rounded-lg text-xs transition-colors cursor-pointer"
+                            >
+                              ביטול
+                            </button>
+                          </div>
                         </div>
-                        <button
-                          onClick={() => onRemoveStaff(s.id)}
-                          className="bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 p-1.5 rounded-lg border border-slate-200 cursor-pointer"
-                          title="הסר איש צוות"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                      ) : (
+                        <div key={s.id} className="py-3 flex justify-between items-center">
+                          <div>
+                            <div className="font-bold text-slate-900 text-sm">{s.fullName}</div>
+                            <div className="text-xs text-slate-500">{s.email}</div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => startEditingStaff(s)}
+                              className="bg-slate-100 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 p-1.5 rounded-lg border border-slate-200 cursor-pointer"
+                              title="ערוך איש צוות"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => onRemoveStaff(s.id)}
+                              className="bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 p-1.5 rounded-lg border border-slate-200 cursor-pointer"
+                              title="הסר איש צוות"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      )
                     ))
                   )}
                 </div>

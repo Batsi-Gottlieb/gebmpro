@@ -2,12 +2,11 @@
 //
 // יוצר איש/אשת צוות חדש (אדמין נוסף) שיכול להתחבר לפאנל הניהול.
 // חייב להגיע ממשתמש מחובר שכבר נמצא בטבלת staff.
-// יוצר משתמש Auth חדש + שורת staff, ושולח מייל עם קישור להגדרת סיסמה
-// (בדיוק כמו איפוס סיסמה - reuse את אותו מסך "קביעת סיסמה חדשה" בפרונט).
+// יוצר משתמש Auth חדש + שורת staff, עם אימייל וסיסמה שנקבעים כאן ישירות
+// ע"י איש הצוות היוצר - לא נשלח כל מייל, ואין מנגנון קישור/איפוס סיסמה.
 
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { corsHeaders, handleCors } from '../_shared/cors.ts'
-import { sendMail, buildEmailHtml } from '../_shared/mailer.ts'
 
 Deno.serve(async (req: Request) => {
   const cors = handleCors(req)
@@ -49,19 +48,26 @@ Deno.serve(async (req: Request) => {
       })
     }
 
-    const { fullName, email, appUrl } = await req.json()
+    const { fullName, email, password } = await req.json()
 
-    if (!fullName || !email) {
-      return new Response(JSON.stringify({ error: 'שדות חובה חסרים (שם, אימייל)' }), {
+    if (!fullName || !email || !password) {
+      return new Response(JSON.stringify({ error: 'שדות חובה חסרים (שם, אימייל, סיסמה)' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    // שלב 1: יצירת משתמש Auth חדש עם סיסמה אקראית (יוחלף ע"י הקישור שיישלח)
+    if (typeof password !== 'string' || password.length < 6) {
+      return new Response(JSON.stringify({ error: 'הסיסמה חייבת להיות באורך 6 תווים לפחות' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
+
+    // שלב 1: יצירת משתמש Auth חדש עם האימייל והסיסמה שנקבעו
     const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
-      password: crypto.randomUUID(),
+      password,
       email_confirm: true,
     })
 
@@ -88,28 +94,9 @@ Deno.serve(async (req: Request) => {
       })
     }
 
-    // שלב 3: קישור להגדרת סיסמה - אותו מנגנון בדיוק כמו "שכחתי סיסמה"
-    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-      type: 'recovery',
-      email,
-      options: appUrl ? { redirectTo: appUrl } : undefined,
-    })
-
-    let emailSent = false
-    if (!linkError && linkData?.properties?.action_link) {
-      const body =
-        `שלום ${fullName},\n\n` +
-        `נוצר לך חשבון ניהול במערכת מסמכים - גוטליב את ביטון.\n` +
-        `להגדרת סיסמה וכניסה ראשונה, לחץ/י על הקישור הבא:\n${linkData.properties.action_link}\n\n` +
-        `הקישור תקף לזמן מוגבל.`
-      const mailResult = await sendMail(email, 'הזמנה לניהול המערכת', body, buildEmailHtml(body, appUrl))
-      emailSent = mailResult.ok
-    }
-
     return new Response(
       JSON.stringify({
         staff: { id: newStaff.id, fullName: newStaff.full_name, email: newStaff.email },
-        emailSent,
       }),
       { status: 201, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )

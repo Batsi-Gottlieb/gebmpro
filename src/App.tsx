@@ -405,16 +405,26 @@ export default function App() {
   };
 
   // ---------- ניהול אנשי צוות (אדמינים) ----------
-  const handleAddStaff = async (fullName: string, email: string) => {
+  const handleAddStaff = async (fullName: string, email: string, password: string) => {
     try {
-      const result = await api.addStaffMember(fullName, email);
+      await api.addStaffMember(fullName, email, password);
       await loadAdminData();
-      showAlert(
-        `איש הצוות "${fullName}" נוצר בהצלחה` +
-          (result.emailSent ? ' ונשלח לו מייל להגדרת סיסמה.' : ' (המייל לא נשלח - יש לבדוק הגדרות SMTP).')
-      );
+      showAlert(`איש הצוות "${fullName}" נוצר בהצלחה. הוא יכול להתחבר עם האימייל והסיסמה שהוגדרו.`);
     } catch (err) {
       showAlert(err instanceof Error ? err.message : 'שגיאה ביצירת איש צוות', 'error');
+    }
+  };
+
+  const handleUpdateStaff = async (
+    staffId: string,
+    updates: { fullName?: string; email?: string; password?: string }
+  ) => {
+    try {
+      await api.updateStaffMember(staffId, updates);
+      await loadAdminData();
+      showAlert('פרטי איש הצוות עודכנו בהצלחה');
+    } catch (err) {
+      showAlert(err instanceof Error ? err.message : 'שגיאה בעדכון איש צוות', 'error');
     }
   };
 
@@ -817,6 +827,7 @@ export default function App() {
             onUpdateClientContact={handleUpdateClientContact}
             onDeleteClientContact={handleDeleteClientContact}
             onAddStaff={handleAddStaff}
+            onUpdateStaff={handleUpdateStaff}
             onRemoveStaff={handleRemoveStaff}
             onResendAccessCodes={handleResendAccessCodes}
           />

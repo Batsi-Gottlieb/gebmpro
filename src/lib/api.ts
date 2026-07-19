@@ -489,16 +489,31 @@ export async function fetchStaff(): Promise<StaffMember[]> {
 
 export async function addStaffMember(
   fullName: string,
-  email: string
-): Promise<{ staff: StaffMember; emailSent: boolean }> {
+  email: string,
+  password: string
+): Promise<{ staff: StaffMember }> {
   const res = await fetch(`${FUNCTIONS_URL}/create-staff`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
-    body: JSON.stringify({ fullName, email, appUrl: window.location.origin }),
+    body: JSON.stringify({ fullName, email, password }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'שגיאה ביצירת איש הצוות');
-  return { staff: mapStaffRow(data.staff), emailSent: !!data.emailSent };
+  return { staff: mapStaffRow(data.staff) };
+}
+
+export async function updateStaffMember(
+  staffId: string,
+  updates: { fullName?: string; email?: string; password?: string }
+): Promise<StaffMember> {
+  const res = await fetch(`${FUNCTIONS_URL}/update-staff`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
+    body: JSON.stringify({ staffId, ...updates }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'שגיאה בעדכון איש הצוות');
+  return mapStaffRow(data.staff);
 }
 
 export async function removeStaffMember(staffId: string): Promise<void> {
