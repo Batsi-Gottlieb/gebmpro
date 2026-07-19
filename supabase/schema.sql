@@ -306,7 +306,10 @@ create policy "clients_upload_own_folder"
     and exists (
       select 1 from clients
       where clients.auth_user_id = auth.uid()
-      and (storage.foldername(name))[2] = clients.id::text
+      -- מפורש objects.name ולא name בלבד, כי בתוך תת-השאילתה על clients
+      -- שם העמודה הלא-מפורש היה מוצל ע"י clients.name (שם הלקוח בפועל),
+      -- מה שגרם לכשל שקט של המדיניות (RLS) בהעלאת קבצים.
+      and (storage.foldername(objects.name))[2] = clients.id::text
     )
   );
 
@@ -317,7 +320,7 @@ create policy "clients_read_own_folder"
     and exists (
       select 1 from clients
       where clients.auth_user_id = auth.uid()
-      and (storage.foldername(name))[2] = clients.id::text
+      and (storage.foldername(objects.name))[2] = clients.id::text
     )
   );
 
