@@ -30,11 +30,15 @@ export interface StaffMember {
   email: string;
 }
 
+// סוגי קבצים מותרים להעלאה למסמך נדרש - נבחר ע"י צ'קבוקסים בהגדרות המחלקה
+export type DocumentFileType = 'image' | 'word' | 'pdf' | 'excel';
+
 export interface RequiredDocument {
   id: string;
   name: string;
   isRequired: boolean;
   description?: string;
+  allowedFileTypes: DocumentFileType[];
 }
 
 export interface TrackingSettings {

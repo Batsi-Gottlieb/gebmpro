@@ -52,6 +52,43 @@ export default function ClientPortal({
     }
   };
 
+  // ממפה סוגי קבצים מותרים (image/word/pdf) למחרוזת accept של input[type=file]
+  const fileTypeAcceptMap: Record<string, string> = {
+    image: 'image/*',
+    word: '.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    pdf: '.pdf,application/pdf',
+    excel: '.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  };
+
+  const getAcceptForDoc = (doc: RequiredDocument): string => {
+    const types = doc.allowedFileTypes && doc.allowedFileTypes.length ? doc.allowedFileTypes : ['image', 'word', 'pdf', 'excel'];
+    return types.map((t) => fileTypeAcceptMap[t]).join(',');
+  };
+
+  // בדיקה בפועל אם קובץ שנבחר תואם לאחד מסוגי הקבצים המותרים למסמך הזה
+  const isFileTypeAllowed = (doc: RequiredDocument, file: File): boolean => {
+    const types = doc.allowedFileTypes && doc.allowedFileTypes.length ? doc.allowedFileTypes : ['image', 'word', 'pdf', 'excel'];
+    const name = file.name.toLowerCase();
+    const mime = file.type.toLowerCase();
+    return types.some((t) => {
+      if (t === 'image') return mime.startsWith('image/');
+      if (t === 'pdf') return mime === 'application/pdf' || name.endsWith('.pdf');
+      if (t === 'word') return (
+        mime === 'application/msword' ||
+        mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+        name.endsWith('.doc') ||
+        name.endsWith('.docx')
+      );
+      if (t === 'excel') return (
+        mime === 'application/vnd.ms-excel' ||
+        mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+        name.endsWith('.xls') ||
+        name.endsWith('.xlsx')
+      );
+      return false;
+    });
+  };
+
   const handleDrop = (e: React.DragEvent, docId: string) => {
     e.preventDefault();
     e.stopPropagation();
@@ -68,6 +105,13 @@ export default function ClientPortal({
   };
 
   const handleFileSelected = (docId: string, file: File) => {
+    const doc = project.requiredDocuments.find((d) => d.id === docId);
+    if (doc && !isFileTypeAllowed(doc, file)) {
+      const types = doc.allowedFileTypes && doc.allowedFileTypes.length ? doc.allowedFileTypes : ['image', 'word', 'pdf', 'excel'];
+      const labels: Record<string, string> = { image: 'תמונה', word: 'Word', pdf: 'PDF', excel: 'Excel' };
+      alert(`סוג הקובץ אינו נתמך למסמך "${doc.name}". סוגים מותרים: ${types.map((t) => labels[t]).join(', ')}.`);
+      return;
+    }
     setUploadingDocId(docId);
     // Simulate a brief upload progress
     setTimeout(() => {
@@ -396,6 +440,7 @@ export default function ClientPortal({
                       {/* Hidden File Input */}
                       <input
                         type="file"
+                        accept={getAcceptForDoc(doc)}
                         ref={(el) => { fileInputRefs.current[doc.id] = el; }}
                         onChange={(e) => handleFileChange(e, doc.id)}
                         className="hidden"

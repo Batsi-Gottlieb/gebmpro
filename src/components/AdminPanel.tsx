@@ -34,7 +34,7 @@ import {
   BellOff,
   BellRing
 } from 'lucide-react';
-import { Client, Project, ClientProjectState, FileVersion, NotificationLog, ClientContact, StaffMember } from '../types';
+import { Client, Project, ClientProjectState, FileVersion, NotificationLog, ClientContact, StaffMember, RequiredDocument, DocumentFileType } from '../types';
 
 interface AdminPanelProps {
   projects: Project[];
@@ -64,6 +64,16 @@ interface AdminPanelProps {
     smsTemplate: string;
     requiredDocuments: { name: string; description?: string; isRequired: boolean }[];
   }) => void;
+  onUpdateProjectDetails: (projectId: string, updates: Partial<{ name: string; description: string }>) => void;
+  onAddRequiredDocument: (
+    projectId: string,
+    doc: { name: string; description?: string; isRequired: boolean; allowedFileTypes: DocumentFileType[] }
+  ) => void;
+  onUpdateRequiredDocument: (
+    docId: string,
+    updates: Partial<{ name: string; description: string; isRequired: boolean; allowedFileTypes: DocumentFileType[] }>
+  ) => void;
+  onDeleteRequiredDocument: (docId: string) => void;
   onExportData: () => void;
   onImportData: (jsonStr: string) => boolean;
   onImpersonate: (accessCode: string) => void;
@@ -93,6 +103,10 @@ export default function AdminPanel({
   onSendBulkReminders,
   onUpdateProjectSettings,
   onAddProject,
+  onUpdateProjectDetails,
+  onAddRequiredDocument,
+  onUpdateRequiredDocument,
+  onDeleteRequiredDocument,
   onExportData,
   onImportData,
   onImpersonate,
@@ -316,6 +330,69 @@ export default function AdminPanel({
   const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'missing' | 'pending-review'>('all');
 
   const selectedProject = projects.find(p => p.id === selectedProjectId) || projects[0];
+
+  // עריכת מסמכים נדרשים בלשונית ההגדרות (לכל פרויקט)
+  const FILE_TYPE_OPTIONS: { key: DocumentFileType; label: string }[] = [
+    { key: 'image', label: 'תמונה' },
+    { key: 'word', label: 'Word' },
+    { key: 'pdf', label: 'PDF' },
+    { key: 'excel', label: 'Excel' },
+  ];
+
+  const toggleFileType = (list: DocumentFileType[], type: DocumentFileType): DocumentFileType[] =>
+    list.includes(type) ? list.filter((t) => t !== type) : [...list, type];
+
+  const [editingDocId, setEditingDocId] = useState<string | null>(null);
+  const [editDocName, setEditDocName] = useState('');
+  const [editDocDescription, setEditDocDescription] = useState('');
+  const [editDocRequired, setEditDocRequired] = useState(true);
+  const [editDocFileTypes, setEditDocFileTypes] = useState<DocumentFileType[]>(['image', 'word', 'pdf', 'excel']);
+
+  const startEditingDoc = (doc: RequiredDocument) => {
+    setEditingDocId(doc.id);
+    setEditDocName(doc.name);
+    setEditDocDescription(doc.description || '');
+    setEditDocRequired(doc.isRequired);
+    setEditDocFileTypes(doc.allowedFileTypes && doc.allowedFileTypes.length ? doc.allowedFileTypes : ['image', 'word', 'pdf', 'excel']);
+  };
+
+  const handleSaveDocEdit = (docId: string) => {
+    if (!editDocName) return;
+    onUpdateRequiredDocument(docId, {
+      name: editDocName,
+      description: editDocDescription || undefined,
+      isRequired: editDocRequired,
+      allowedFileTypes: editDocFileTypes,
+    });
+    setEditingDocId(null);
+  };
+
+  // טופס הוספת מסמך נדרש חדש בלשונית ההגדרות (לפרויקט הקיים שנבחר)
+  const [isAddingSettingsDoc, setIsAddingSettingsDoc] = useState(false);
+  const [settingsDocName, setSettingsDocName] = useState('');
+  const [settingsDocDescription, setSettingsDocDescription] = useState('');
+  const [settingsDocRequired, setSettingsDocRequired] = useState(true);
+  const [settingsDocFileTypes, setSettingsDocFileTypes] = useState<DocumentFileType[]>(['image', 'word', 'pdf', 'excel']);
+
+  const resetSettingsDocForm = () => {
+    setSettingsDocName('');
+    setSettingsDocDescription('');
+    setSettingsDocRequired(true);
+    setSettingsDocFileTypes(['image', 'word', 'pdf', 'excel']);
+  };
+
+  const handleAddSettingsDoc = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!settingsDocName || !selectedProject) return;
+    onAddRequiredDocument(selectedProject.id, {
+      name: settingsDocName,
+      description: settingsDocDescription || undefined,
+      isRequired: settingsDocRequired,
+      allowedFileTypes: settingsDocFileTypes,
+    });
+    resetSettingsDocForm();
+    setIsAddingSettingsDoc(false);
+  };
 
   const handleCreateClient = (e: React.FormEvent) => {
     e.preventDefault();
@@ -2022,6 +2099,208 @@ export default function AdminPanel({
           {/* TAB 3: ALERTS & NOTIFICATION SETTINGS */}
           {activeTab === 'settings' && (
             <div className="space-y-6">
+              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs">
+                <h3 className="text-lg font-bold text-slate-900 mb-2 flex items-center gap-2">
+                  <Sliders className="w-5 h-5 text-indigo-600" />
+                  פרטי המחלקה ומסמכים נדרשים
+                </h3>
+                <p className="text-xs text-slate-500 mb-4">
+                  ערכו את שם המחלקה, ואת רשימת המסמכים שכל לקוח נדרש להעלות - כולל אילו סוגי קבצים מותרים להעלאה לכל מסמך.
+                </p>
+
+                <div className="mb-5">
+                  <label className="block text-xs font-bold text-slate-600 mb-1">שם המחלקה / הפרויקט</label>
+                  <input
+                    type="text"
+                    value={selectedProject.name}
+                    onChange={(e) => onUpdateProjectDetails(selectedProject.id, { name: e.target.value })}
+                    className="w-full md:w-1/2 bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-2.5 text-sm font-bold focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div className="flex justify-between items-center mb-3">
+                  <h4 className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                    <FileSpreadsheet className="w-4 h-4 text-indigo-600" />
+                    מסמכים נדרשים ({selectedProject.requiredDocuments.length})
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingSettingsDoc(!isAddingSettingsDoc)}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    הוספת מסמך נדרש
+                  </button>
+                </div>
+
+                <AnimatePresence>
+                  {isAddingSettingsDoc && (
+                    <motion.form
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      onSubmit={handleAddSettingsDoc}
+                      className="bg-slate-50 border border-slate-200 rounded-xl p-3 mb-3 overflow-hidden space-y-2"
+                    >
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <input
+                          type="text"
+                          required
+                          placeholder="שם המסמך *"
+                          value={settingsDocName}
+                          onChange={(e) => setSettingsDocName(e.target.value)}
+                          className="bg-white text-slate-900 border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                        />
+                        <input
+                          type="text"
+                          placeholder="תיאור (לא חובה)"
+                          value={settingsDocDescription}
+                          onChange={(e) => setSettingsDocDescription(e.target.value)}
+                          className="bg-white text-slate-900 border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                        />
+                      </div>
+                      <div className="flex flex-wrap items-center gap-4">
+                        <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={settingsDocRequired}
+                            onChange={(e) => setSettingsDocRequired(e.target.checked)}
+                            className="w-3.5 h-3.5 accent-indigo-600 rounded cursor-pointer"
+                          />
+                          מסמך חובה
+                        </label>
+                        <span className="text-[11px] font-bold text-slate-500">סוגי קבצים מותרים:</span>
+                        {FILE_TYPE_OPTIONS.map((opt) => (
+                          <label key={opt.key} className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={settingsDocFileTypes.includes(opt.key)}
+                              onChange={() => setSettingsDocFileTypes(prev => toggleFileType(prev, opt.key))}
+                              className="w-3.5 h-3.5 accent-indigo-600 rounded cursor-pointer"
+                            />
+                            {opt.label}
+                          </label>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          type="submit"
+                          className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition-colors cursor-pointer"
+                        >
+                          שמור מסמך
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { resetSettingsDocForm(); setIsAddingSettingsDoc(false); }}
+                          className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-3 py-1.5 rounded-lg text-xs transition-colors cursor-pointer"
+                        >
+                          ביטול
+                        </button>
+                      </div>
+                    </motion.form>
+                  )}
+                </AnimatePresence>
+
+                {selectedProject.requiredDocuments.length === 0 ? (
+                  <div className="text-center py-6 text-slate-400 border border-dashed border-slate-200 rounded-lg text-xs">
+                    אין עדיין מסמכים נדרשים למחלקה זו.
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {selectedProject.requiredDocuments.map((doc) => (
+                      editingDocId === doc.id ? (
+                        <div key={doc.id} className="bg-white p-3 rounded-lg border border-indigo-200 space-y-2">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <input
+                              type="text"
+                              placeholder="שם המסמך *"
+                              value={editDocName}
+                              onChange={(e) => setEditDocName(e.target.value)}
+                              className="bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                            />
+                            <input
+                              type="text"
+                              placeholder="תיאור (לא חובה)"
+                              value={editDocDescription}
+                              onChange={(e) => setEditDocDescription(e.target.value)}
+                              className="bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                            />
+                          </div>
+                          <div className="flex flex-wrap items-center gap-4">
+                            <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={editDocRequired}
+                                onChange={(e) => setEditDocRequired(e.target.checked)}
+                                className="w-3.5 h-3.5 accent-indigo-600 rounded cursor-pointer"
+                              />
+                              מסמך חובה
+                            </label>
+                            <span className="text-[11px] font-bold text-slate-500">סוגי קבצים מותרים:</span>
+                            {FILE_TYPE_OPTIONS.map((opt) => (
+                              <label key={opt.key} className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 cursor-pointer select-none">
+                                <input
+                                  type="checkbox"
+                                  checked={editDocFileTypes.includes(opt.key)}
+                                  onChange={() => setEditDocFileTypes(prev => toggleFileType(prev, opt.key))}
+                                  className="w-3.5 h-3.5 accent-indigo-600 rounded cursor-pointer"
+                                />
+                                {opt.label}
+                              </label>
+                            ))}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleSaveDocEdit(doc.id)}
+                              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition-colors cursor-pointer"
+                            >
+                              שמור
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingDocId(null)}
+                              className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-3 py-1.5 rounded-lg text-xs transition-colors cursor-pointer"
+                            >
+                              ביטול
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div key={doc.id} className="flex justify-between items-center bg-white p-2.5 rounded-lg border border-slate-200 text-xs">
+                          <div>
+                            <span className="font-bold text-slate-800">{doc.name}</span>
+                            {doc.description && <span className="text-slate-500 mr-2"> • {doc.description}</span>}
+                            <span className={`mr-2 font-bold ${doc.isRequired ? 'text-emerald-600' : 'text-slate-400'}`}>
+                              {doc.isRequired ? 'חובה' : 'לא חובה'}
+                            </span>
+                            <span className="text-slate-400 mr-2">
+                              • {doc.allowedFileTypes.map(t => FILE_TYPE_OPTIONS.find(o => o.key === t)?.label).join(', ')}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => startEditingDoc(doc)}
+                              className="bg-slate-100 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 p-1.5 rounded-lg border border-slate-200 cursor-pointer"
+                              title="ערוך מסמך"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => onDeleteRequiredDocument(doc.id)}
+                              className="bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 p-1.5 rounded-lg border border-slate-200 cursor-pointer"
+                              title="הסר מסמך"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs">
                 <h3 className="text-lg font-bold text-slate-900 mb-2 flex items-center gap-2">
                   <Settings className="w-5 h-5 text-indigo-600" />

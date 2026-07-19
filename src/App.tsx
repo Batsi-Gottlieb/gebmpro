@@ -8,7 +8,7 @@ import {
   Loader2,
   UserCog,
 } from 'lucide-react';
-import { Client, Project, ClientProjectState, NotificationLog, ClientContact, StaffMember } from './types';
+import { Client, Project, ClientProjectState, NotificationLog, ClientContact, StaffMember, DocumentFileType } from './types';
 import AdminPanel from './components/AdminPanel';
 import ClientPortal from './components/ClientPortal';
 import * as api from './lib/api';
@@ -488,6 +488,55 @@ export default function App() {
     }
   };
 
+  // ---------- עדכון פרטי מחלקה קיימת + ניהול המסמכים הנדרשים שלה ----------
+  const handleUpdateProjectDetails = async (
+    projectId: string,
+    updates: Partial<{ name: string; description: string }>
+  ) => {
+    try {
+      await api.updateProjectDetails(projectId, updates);
+      await loadAdminData();
+    } catch (err) {
+      showAlert(err instanceof Error ? err.message : 'שגיאה בעדכון פרטי המחלקה', 'error');
+    }
+  };
+
+  const handleAddRequiredDocument = async (
+    projectId: string,
+    doc: { name: string; description?: string; isRequired: boolean; allowedFileTypes: DocumentFileType[] }
+  ) => {
+    try {
+      await api.addRequiredDocument(projectId, doc);
+      await loadAdminData();
+      showAlert(`המסמך "${doc.name}" נוסף בהצלחה לרשימת המסמכים הנדרשים.`);
+    } catch (err) {
+      showAlert(err instanceof Error ? err.message : 'שגיאה בהוספת מסמך נדרש', 'error');
+    }
+  };
+
+  const handleUpdateRequiredDocument = async (
+    docId: string,
+    updates: Partial<{ name: string; description: string; isRequired: boolean; allowedFileTypes: DocumentFileType[] }>
+  ) => {
+    try {
+      await api.updateRequiredDocument(docId, updates);
+      await loadAdminData();
+    } catch (err) {
+      showAlert(err instanceof Error ? err.message : 'שגיאה בעדכון מסמך נדרש', 'error');
+    }
+  };
+
+  const handleDeleteRequiredDocument = async (docId: string) => {
+    if (!confirm('להסיר את המסמך הנדרש הזה? לקוחות לא יראו אותו יותר ברשימה.')) return;
+    try {
+      await api.deleteRequiredDocument(docId);
+      await loadAdminData();
+      showAlert('המסמך הנדרש הוסר בהצלחה');
+    } catch (err) {
+      showAlert(err instanceof Error ? err.message : 'שגיאה בהסרת מסמך נדרש', 'error');
+    }
+  };
+
   const handleExportData = () => {
     const fullState = {
       exportedAt: new Date().toISOString(),
@@ -820,6 +869,10 @@ export default function App() {
             onSendBulkReminders={handleSendBulkReminders}
             onUpdateProjectSettings={handleUpdateProjectSettings}
             onAddProject={handleAddProject}
+            onUpdateProjectDetails={handleUpdateProjectDetails}
+            onAddRequiredDocument={handleAddRequiredDocument}
+            onUpdateRequiredDocument={handleUpdateRequiredDocument}
+            onDeleteRequiredDocument={handleDeleteRequiredDocument}
             onExportData={handleExportData}
             onImportData={handleImportData}
             onImpersonate={handleImpersonate}

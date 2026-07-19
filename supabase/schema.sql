@@ -51,6 +51,8 @@ create table required_documents (
   name text not null,
   description text,
   is_required boolean not null default true,
+  -- סוגי קבצים מותרים להעלאה למסמך זה: 'image' / 'word' / 'pdf' (אפשר כמה יחד)
+  allowed_file_types text[] not null default array['image', 'word', 'pdf', 'excel'],
   sort_order int not null default 0,
   created_at timestamptz not null default now()
 );

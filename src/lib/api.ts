@@ -7,6 +7,8 @@ import {
   NotificationLog,
   ClientContact,
   StaffMember,
+  RequiredDocument,
+  DocumentFileType,
 } from '../types';
 
 // ============================================================
@@ -61,6 +63,9 @@ function mapProjectRow(row: any, requiredDocs: any[]): Project {
         name: d.name,
         isRequired: d.is_required,
         description: d.description ?? undefined,
+        allowedFileTypes: (d.allowed_file_types && d.allowed_file_types.length
+          ? d.allowed_file_types
+          : ['image', 'word', 'pdf', 'excel']) as DocumentFileType[],
       })),
     trackingSettings: {
       reminderIntervalDays: row.reminder_interval_days,
@@ -567,6 +572,7 @@ export async function addProject(project: {
       name: d.name,
       description: d.description || null,
       is_required: d.isRequired,
+      allowed_file_types: ['image', 'word', 'pdf', 'excel'],
       sort_order: idx,
     }));
 
@@ -581,4 +587,76 @@ export async function addProject(project: {
   }
 
   return mapProjectRow(newProject, insertedDocs);
+}
+
+// עדכון פרטי מחלקה/פרויקט קיים (שם/תיאור)
+export async function updateProjectDetails(
+  projectId: string,
+  updates: Partial<{ name: string; description: string }>
+): Promise<void> {
+  const dbUpdates: Record<string, unknown> = {};
+  if (updates.name !== undefined) dbUpdates.name = updates.name;
+  if (updates.description !== undefined) dbUpdates.description = updates.description || null;
+
+  const { error } = await supabase.from('projects').update(dbUpdates).eq('id', projectId);
+  if (error) throw error;
+}
+
+// הוספת מסמך נדרש חדש למחלקה קיימת
+export async function addRequiredDocument(
+  projectId: string,
+  doc: { name: string; description?: string; isRequired: boolean; allowedFileTypes: DocumentFileType[] }
+): Promise<RequiredDocument> {
+  const { count } = await supabase
+    .from('required_documents')
+    .select('id', { count: 'exact', head: true })
+    .eq('project_id', projectId);
+
+  const { data, error } = await supabase
+    .from('required_documents')
+    .insert({
+      project_id: projectId,
+      name: doc.name,
+      description: doc.description || null,
+      is_required: doc.isRequired,
+      allowed_file_types: doc.allowedFileTypes.length ? doc.allowedFileTypes : ['image', 'word', 'pdf', 'excel'],
+      sort_order: count ?? 0,
+    })
+    .select()
+    .single();
+
+  if (error || !data) throw error ?? new Error('שגיאה בהוספת מסמך נדרש');
+
+  return {
+    id: data.id,
+    name: data.name,
+    isRequired: data.is_required,
+    description: data.description ?? undefined,
+    allowedFileTypes: (data.allowed_file_types && data.allowed_file_types.length
+      ? data.allowed_file_types
+      : ['image', 'word', 'pdf', 'excel']) as DocumentFileType[],
+  };
+}
+
+// עדכון מסמך נדרש קיים (שם/תיאור/חובה/סוגי קבצים מותרים)
+export async function updateRequiredDocument(
+  docId: string,
+  updates: Partial<{ name: string; description: string; isRequired: boolean; allowedFileTypes: DocumentFileType[] }>
+): Promise<void> {
+  const dbUpdates: Record<string, unknown> = {};
+  if (updates.name !== undefined) dbUpdates.name = updates.name;
+  if (updates.description !== undefined) dbUpdates.description = updates.description || null;
+  if (updates.isRequired !== undefined) dbUpdates.is_required = updates.isRequired;
+  if (updates.allowedFileTypes !== undefined) {
+    dbUpdates.allowed_file_types = updates.allowedFileTypes.length ? updates.allowedFileTypes : ['image', 'word', 'pdf', 'excel'];
+  }
+
+  const { error } = await supabase.from('required_documents').update(dbUpdates).eq('id', docId);
+  if (error) throw error;
+}
+
+// מחיקת מסמך נדרש
+export async function deleteRequiredDocument(docId: string): Promise<void> {
+  const { error } = await supabase.from('required_documents').delete().eq('id', docId);
+  if (error) throw error;
 }
