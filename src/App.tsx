@@ -252,12 +252,32 @@ export default function App() {
   // ---------- פעולות אדמין ----------
   const handleAddClient = async (
     newClient: Omit<Client, 'id' | 'accessCode' | 'projectId'>,
-    projectId: string
+    projectId: string,
+    additionalContacts?: { name: string; email?: string; phone?: string; receivesNotifications: boolean }[]
   ) => {
     try {
       const created = await api.addClient(projectId, newClient);
+
+      let contactsAdded = 0;
+      let contactsFailed = 0;
+      if (additionalContacts && additionalContacts.length > 0) {
+        for (const contact of additionalContacts) {
+          if (!contact.name) continue;
+          try {
+            await api.addClientContact(created.id, contact);
+            contactsAdded++;
+          } catch {
+            contactsFailed++;
+          }
+        }
+      }
+
       await loadAdminData();
-      showAlert(`לקוח "${created.name}" התווסף בהצלחה עם קוד גישה: ${created.accessCode}`);
+
+      let message = `לקוח "${created.name}" התווסף בהצלחה עם קוד גישה: ${created.accessCode}`;
+      if (contactsAdded > 0) message += ` וכן ${contactsAdded} משתמשים נוספים.`;
+      if (contactsFailed > 0) message += ` (שגיאה בהוספת ${contactsFailed} מהמשתמשים הנוספים - ניתן להוסיפם ידנית).`;
+      showAlert(message);
     } catch (err) {
       showAlert(err instanceof Error ? err.message : 'שגיאה בהוספת הלקוח', 'error');
     }

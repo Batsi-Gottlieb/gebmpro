@@ -43,7 +43,11 @@ interface AdminPanelProps {
   notificationLogs: NotificationLog[];
   clientContacts: ClientContact[];
   staff: StaffMember[];
-  onAddClient: (client: Omit<Client, 'id' | 'accessCode' | 'projectId'>, projectId: string) => void;
+  onAddClient: (
+    client: Omit<Client, 'id' | 'accessCode' | 'projectId'>,
+    projectId: string,
+    additionalContacts?: { name: string; email?: string; phone?: string; receivesNotifications: boolean }[]
+  ) => void;
   onUpdateClient: (clientId: string, updated: Partial<Client>) => void;
   onDeleteClient: (clientId: string) => void;
   onImportClients: (importedClients: Omit<Client, 'id' | 'accessCode' | 'projectId'>[], projectId: string) => void;
@@ -138,6 +142,11 @@ export default function AdminPanel({
   const [newClientRole, setNewClientRole] = useState<'manager' | 'regular'>('regular');
   const [newClientSendNotifications, setNewClientSendNotifications] = useState(true);
   const [newClientNotes, setNewClientNotes] = useState('');
+  const [newClientExtraContacts, setNewClientExtraContacts] = useState<{ name: string; email: string; phone: string; receivesNotifications: boolean }[]>([]);
+  const [newClientContactDraftName, setNewClientContactDraftName] = useState('');
+  const [newClientContactDraftEmail, setNewClientContactDraftEmail] = useState('');
+  const [newClientContactDraftPhone, setNewClientContactDraftPhone] = useState('');
+  const [newClientContactDraftNotify, setNewClientContactDraftNotify] = useState(true);
 
   // States for manual client creation inside the import tab
   const [manualClientName, setManualClientName] = useState('');
@@ -147,6 +156,11 @@ export default function AdminPanel({
   const [manualClientSendNotifications, setManualClientSendNotifications] = useState(true);
   const [manualClientNotes, setManualClientNotes] = useState('');
   const [manualClientFeedback, setManualClientFeedback] = useState<string | null>(null);
+  const [manualClientExtraContacts, setManualClientExtraContacts] = useState<{ name: string; email: string; phone: string; receivesNotifications: boolean }[]>([]);
+  const [manualContactDraftName, setManualContactDraftName] = useState('');
+  const [manualContactDraftEmail, setManualContactDraftEmail] = useState('');
+  const [manualContactDraftPhone, setManualContactDraftPhone] = useState('');
+  const [manualContactDraftNotify, setManualContactDraftNotify] = useState(true);
 
   // Bulk / Excel spreadsheet paste text area
   const [excelPasteText, setExcelPasteText] = useState('');
@@ -172,7 +186,12 @@ export default function AdminPanel({
       role: newClientRole,
       sendNotificationsToManager: newClientSendNotifications,
       notes: newClientNotes,
-    }, selectedProject.id);
+    }, selectedProject.id, newClientExtraContacts.map(ec => ({
+      name: ec.name,
+      email: ec.email || undefined,
+      phone: ec.phone || undefined,
+      receivesNotifications: ec.receivesNotifications,
+    })));
 
     // Reset Form
     setNewClientName('');
@@ -181,6 +200,11 @@ export default function AdminPanel({
     setNewClientRole('regular');
     setNewClientSendNotifications(true);
     setNewClientNotes('');
+    setNewClientExtraContacts([]);
+    setNewClientContactDraftName('');
+    setNewClientContactDraftEmail('');
+    setNewClientContactDraftPhone('');
+    setNewClientContactDraftNotify(true);
     setIsAddingClient(false);
   };
 
@@ -198,7 +222,12 @@ export default function AdminPanel({
       role: manualClientRole,
       sendNotificationsToManager: manualClientRole === 'manager' ? manualClientSendNotifications : false,
       notes: manualClientNotes,
-    }, selectedProject.id);
+    }, selectedProject.id, manualClientExtraContacts.map(ec => ({
+      name: ec.name,
+      email: ec.email || undefined,
+      phone: ec.phone || undefined,
+      receivesNotifications: ec.receivesNotifications,
+    })));
 
     setManualClientFeedback(`הלקוח "${manualClientName}" נוסף בהצלחה למערכת!`);
     
@@ -209,6 +238,11 @@ export default function AdminPanel({
     setManualClientRole('regular');
     setManualClientSendNotifications(true);
     setManualClientNotes('');
+    setManualClientExtraContacts([]);
+    setManualContactDraftName('');
+    setManualContactDraftEmail('');
+    setManualContactDraftPhone('');
+    setManualContactDraftNotify(true);
 
     // Clear feedback after 4 seconds
     setTimeout(() => {
@@ -542,6 +576,95 @@ export default function AdminPanel({
                           placeholder="לדוגמה: נא לא לשלוח התראות בימי שלישי..."
                           className="w-full bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                         />
+                      </div>
+
+                      <div className="md:col-span-3 bg-slate-50 border border-slate-200 rounded-xl p-4">
+                        <h4 className="font-bold text-slate-800 text-sm flex items-center gap-1.5 mb-1">
+                          <UserPlus className="w-4 h-4 text-indigo-600" />
+                          משתמשים נוספים ללקוח זה ({newClientExtraContacts.length})
+                        </h4>
+                        <p className="text-[11px] text-slate-500 mb-3">
+                          כל המשתמשים הנוספים יקבלו את קוד הגישה במייל/SMS בעת יצירת הלקוח, ללא קשר להגדרת קבלת ההתראות שלהם.
+                        </p>
+
+                        {newClientExtraContacts.length > 0 && (
+                          <div className="space-y-1.5 mb-3">
+                            {newClientExtraContacts.map((contact, idx) => (
+                              <div key={idx} className="flex justify-between items-center bg-white p-2 rounded-lg border border-slate-200 text-xs">
+                                <div>
+                                  <span className="font-bold text-slate-800">{contact.name}</span>
+                                  {contact.email && <span className="text-slate-500 mr-2"> • {contact.email}</span>}
+                                  {contact.phone && <span className="text-slate-500 mr-2 font-mono"> • {contact.phone}</span>}
+                                  <span className={`mr-2 font-bold ${contact.receivesNotifications ? 'text-emerald-600' : 'text-slate-400'}`}>
+                                    {contact.receivesNotifications ? 'מקבל התראות' : 'לא מקבל התראות'}
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setNewClientExtraContacts(prev => prev.filter((_, i) => i !== idx))}
+                                  className="text-rose-500 hover:text-rose-700 cursor-pointer"
+                                  title="הסר"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-2 bg-white p-3 rounded-lg border border-slate-200">
+                          <input
+                            type="text"
+                            placeholder="שם *"
+                            value={newClientContactDraftName}
+                            onChange={(e) => setNewClientContactDraftName(e.target.value)}
+                            className="bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                          />
+                          <input
+                            type="email"
+                            placeholder="אימייל"
+                            value={newClientContactDraftEmail}
+                            onChange={(e) => setNewClientContactDraftEmail(e.target.value)}
+                            className="bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                          />
+                          <input
+                            type="text"
+                            placeholder="נייד (לא חובה)"
+                            value={newClientContactDraftPhone}
+                            onChange={(e) => setNewClientContactDraftPhone(e.target.value)}
+                            className="bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-2 text-xs font-mono focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                          />
+                          <div className="flex items-center gap-2">
+                            <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 cursor-pointer select-none whitespace-nowrap">
+                              <input
+                                type="checkbox"
+                                checked={newClientContactDraftNotify}
+                                onChange={(e) => setNewClientContactDraftNotify(e.target.checked)}
+                                className="w-3.5 h-3.5 accent-indigo-600 rounded cursor-pointer"
+                              />
+                              מקבל התראות
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!newClientContactDraftName) return;
+                                setNewClientExtraContacts(prev => [...prev, {
+                                  name: newClientContactDraftName,
+                                  email: newClientContactDraftEmail,
+                                  phone: newClientContactDraftPhone,
+                                  receivesNotifications: newClientContactDraftNotify,
+                                }]);
+                                setNewClientContactDraftName('');
+                                setNewClientContactDraftEmail('');
+                                setNewClientContactDraftPhone('');
+                                setNewClientContactDraftNotify(true);
+                              }}
+                              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition-colors cursor-pointer whitespace-nowrap"
+                            >
+                              + הוספה לרשימה
+                            </button>
+                          </div>
+                        </div>
                       </div>
 
                       <div className="md:col-span-3 flex justify-end gap-2 mt-2">
@@ -1285,6 +1408,95 @@ export default function AdminPanel({
                         className="w-full bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-2.5 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                       />
                     </div>
+
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                      <h4 className="font-bold text-slate-800 text-sm flex items-center gap-1.5 mb-1">
+                        <UserPlus className="w-4 h-4 text-indigo-600" />
+                        משתמשים נוספים ללקוח זה ({manualClientExtraContacts.length})
+                      </h4>
+                      <p className="text-[11px] text-slate-500 mb-3">
+                        כל המשתמשים הנוספים יקבלו את קוד הגישה במייל/SMS בעת יצירת הלקוח, ללא קשר להגדרת קבלת ההתראות שלהם.
+                      </p>
+
+                      {manualClientExtraContacts.length > 0 && (
+                        <div className="space-y-1.5 mb-3">
+                          {manualClientExtraContacts.map((contact, idx) => (
+                            <div key={idx} className="flex justify-between items-center bg-white p-2 rounded-lg border border-slate-200 text-xs">
+                              <div>
+                                <span className="font-bold text-slate-800">{contact.name}</span>
+                                {contact.email && <span className="text-slate-500 mr-2"> • {contact.email}</span>}
+                                {contact.phone && <span className="text-slate-500 mr-2 font-mono"> • {contact.phone}</span>}
+                                <span className={`mr-2 font-bold ${contact.receivesNotifications ? 'text-emerald-600' : 'text-slate-400'}`}>
+                                  {contact.receivesNotifications ? 'מקבל התראות' : 'לא מקבל התראות'}
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setManualClientExtraContacts(prev => prev.filter((_, i) => i !== idx))}
+                                className="text-rose-500 hover:text-rose-700 cursor-pointer"
+                                title="הסר"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-2 bg-white p-3 rounded-lg border border-slate-200">
+                        <input
+                          type="text"
+                          placeholder="שם *"
+                          value={manualContactDraftName}
+                          onChange={(e) => setManualContactDraftName(e.target.value)}
+                          className="bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                        />
+                        <input
+                          type="email"
+                          placeholder="אימייל"
+                          value={manualContactDraftEmail}
+                          onChange={(e) => setManualContactDraftEmail(e.target.value)}
+                          className="bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-2 text-xs focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                        />
+                        <input
+                          type="text"
+                          placeholder="נייד (לא חובה)"
+                          value={manualContactDraftPhone}
+                          onChange={(e) => setManualContactDraftPhone(e.target.value)}
+                          className="bg-slate-50 text-slate-900 border border-slate-200 rounded-lg p-2 text-xs font-mono focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                        />
+                        <div className="flex items-center gap-2">
+                          <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 cursor-pointer select-none whitespace-nowrap">
+                            <input
+                              type="checkbox"
+                              checked={manualContactDraftNotify}
+                              onChange={(e) => setManualContactDraftNotify(e.target.checked)}
+                              className="w-3.5 h-3.5 accent-indigo-600 rounded cursor-pointer"
+                            />
+                            מקבל התראות
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!manualContactDraftName) return;
+                              setManualClientExtraContacts(prev => [...prev, {
+                                name: manualContactDraftName,
+                                email: manualContactDraftEmail,
+                                phone: manualContactDraftPhone,
+                                receivesNotifications: manualContactDraftNotify,
+                              }]);
+                              setManualContactDraftName('');
+                              setManualContactDraftEmail('');
+                              setManualContactDraftPhone('');
+                              setManualContactDraftNotify(true);
+                            }}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs transition-colors cursor-pointer whitespace-nowrap"
+                          >
+                            + הוספה לרשימה
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </form>
                 </div>
 
@@ -1299,6 +1511,11 @@ export default function AdminPanel({
                       setManualClientSendNotifications(true);
                       setManualClientNotes('');
                       setManualClientFeedback(null);
+                      setManualClientExtraContacts([]);
+                      setManualContactDraftName('');
+                      setManualContactDraftEmail('');
+                      setManualContactDraftPhone('');
+                      setManualContactDraftNotify(true);
                     }}
                     className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-4 py-2 rounded-lg text-sm transition-colors cursor-pointer"
                   >
