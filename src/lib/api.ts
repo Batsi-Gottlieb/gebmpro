@@ -505,3 +505,18 @@ export async function removeStaffMember(staffId: string): Promise<void> {
   const { error } = await supabase.from('staff').delete().eq('id', staffId);
   if (error) throw error;
 }
+
+// שולח מחדש את קוד הגישה הקיים (מייל + SMS) ללקוחות נבחרים, כולל
+// כל אנשי הקשר הנוספים שלהם. לא יוצר קוד גישה חדש.
+export async function resendAccessCodes(
+  clientIds: string[]
+): Promise<{ results: { clientId: string; emailsSent: number; smsSent: number }[] }> {
+  const res = await fetch(`${FUNCTIONS_URL}/resend-access-code`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(await authHeader()) },
+    body: JSON.stringify({ clientIds, appUrl: window.location.origin }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'שגיאה בשליחה חוזרת של קוד הגישה');
+  return data;
+}

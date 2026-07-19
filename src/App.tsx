@@ -409,6 +409,24 @@ export default function App() {
     }
   };
 
+  // ---------- שליחה חוזרת של קוד גישה ללקוחות נבחרים ----------
+  const handleResendAccessCodes = async (clientIds: string[]) => {
+    if (clientIds.length === 0) {
+      showAlert('בחרו לפחות לקוח אחד', 'error');
+      return;
+    }
+    try {
+      const { results } = await api.resendAccessCodes(clientIds);
+      const totalEmails = results.reduce((sum, r) => sum + r.emailsSent, 0);
+      const totalSms = results.reduce((sum, r) => sum + r.smsSent, 0);
+      showAlert(
+        `קוד הגישה נשלח מחדש ל-${clientIds.length} לקוחות (${totalEmails} מיילים${totalSms > 0 ? `, ${totalSms} הודעות SMS` : ''}).`
+      );
+    } catch (err) {
+      showAlert(err instanceof Error ? err.message : 'שגיאה בשליחה חוזרת של קוד הגישה', 'error');
+    }
+  };
+
   const handleUpdateProjectSettings = async (
     projectId: string,
     settings: Partial<Project['trackingSettings']>
@@ -759,6 +777,7 @@ export default function App() {
             onDeleteClientContact={handleDeleteClientContact}
             onAddStaff={handleAddStaff}
             onRemoveStaff={handleRemoveStaff}
+            onResendAccessCodes={handleResendAccessCodes}
           />
         )}
       </div>

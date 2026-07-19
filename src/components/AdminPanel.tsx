@@ -60,6 +60,7 @@ interface AdminPanelProps {
   onDeleteClientContact: (contactId: string) => void;
   onAddStaff: (fullName: string, email: string) => void;
   onRemoveStaff: (staffId: string) => void;
+  onResendAccessCodes: (clientIds: string[]) => void;
 }
 
 export default function AdminPanel({
@@ -85,7 +86,8 @@ export default function AdminPanel({
   onUpdateClientContact,
   onDeleteClientContact,
   onAddStaff,
-  onRemoveStaff
+  onRemoveStaff,
+  onResendAccessCodes
 }: AdminPanelProps) {
   // Navigation & Tabs
   const [activeTab, setActiveTab] = useState<'clients' | 'import' | 'settings' | 'logs' | 'export-import' | 'users'>('clients');
@@ -105,6 +107,16 @@ export default function AdminPanel({
   
   // Client selection for CPA Review Workflow
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [selectedClientIds, setSelectedClientIds] = useState<Set<string>>(new Set());
+
+  const toggleClientSelection = (clientId: string) => {
+    setSelectedClientIds(prev => {
+      const next = new Set(prev);
+      if (next.has(clientId)) next.delete(clientId);
+      else next.add(clientId);
+      return next;
+    });
+  };
 
   // Automatically scroll down to the CPA Review panel when a client is selected
   useEffect(() => {
@@ -423,6 +435,23 @@ export default function AdminPanel({
                   </button>
 
                   <button 
+                    onClick={() => {
+                      if (selectedClientIds.size === 0) return;
+                      onResendAccessCodes(Array.from(selectedClientIds));
+                    }}
+                    disabled={selectedClientIds.size === 0}
+                    className={`font-bold px-4 py-2 rounded-lg text-sm flex items-center gap-1.5 transition-colors ${
+                      selectedClientIds.size === 0
+                        ? 'bg-slate-50 border border-slate-200 text-slate-400 cursor-not-allowed'
+                        : 'bg-slate-100 hover:bg-slate-200 border border-slate-200 text-indigo-700 cursor-pointer'
+                    }`}
+                    title="שליחת קוד הגישה מחדש ללקוחות שנבחרו"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    שליחה חוזרת של סיסמה{selectedClientIds.size > 0 ? ` (${selectedClientIds.size})` : ''}
+                  </button>
+
+                  <button 
                     onClick={() => setIsAddingClient(true)}
                     className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2 rounded-lg text-sm flex items-center gap-1.5 transition-colors cursor-pointer"
                   >
@@ -546,6 +575,26 @@ export default function AdminPanel({
                   <table className="w-full text-right border-collapse">
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-200 text-xs text-slate-500 font-bold uppercase">
+                        <th className="p-4 w-8">
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
+                            checked={(() => {
+                              const idsInProject = clients.filter(c => c.projectId === selectedProject.id).map(c => c.id);
+                              return idsInProject.length > 0 && idsInProject.every(id => selectedClientIds.has(id));
+                            })()}
+                            onChange={(e) => {
+                              const idsInProject = clients.filter(c => c.projectId === selectedProject.id).map(c => c.id);
+                              setSelectedClientIds(prev => {
+                                const next = new Set(prev);
+                                if (e.target.checked) idsInProject.forEach(id => next.add(id));
+                                else idsInProject.forEach(id => next.delete(id));
+                                return next;
+                              });
+                            }}
+                            title="בחירת כל הלקוחות"
+                          />
+                        </th>
                         <th className="p-4">פרטי הלקוח</th>
                         <th className="p-4">סוג / מנהל</th>
                         <th className="p-4">קוד גישה (סיסמה לאדמין)</th>
@@ -610,6 +659,14 @@ export default function AdminPanel({
                               key={c.id} 
                               className={`hover:bg-slate-50/50 transition-colors ${selectedClientId === c.id ? 'bg-indigo-50/30 border-r-4 border-indigo-600' : ''}`}
                             >
+                              <td className="p-4">
+                                <input
+                                  type="checkbox"
+                                  className="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
+                                  checked={selectedClientIds.has(c.id)}
+                                  onChange={() => toggleClientSelection(c.id)}
+                                />
+                              </td>
                               <td className="p-4">
                                 <div className="font-bold text-slate-900">{c.name}</div>
                                 <div className="text-xs text-slate-500 mt-0.5">{c.email} • {c.phone}</div>
