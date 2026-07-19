@@ -1,50 +1,58 @@
-// עוזר משותף לשליחת מייל (SMTP) - משמש create-client / import-clients /
-// create-staff / add-client-contact / resend-access-code.
-// דורש את ה-Secrets: SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM
-
-import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts'
-import { withTimeout } from './withTimeout.ts'
+// עוזר משותף לשליחת מייל - עובר על HTTP (Resend API) ולא על SMTP גולמי.
+//
+// למה השינוי: חיבור SMTP גולמי (denomailer) בסביבת Deno Edge Functions
+// גרם לקריסות "קשות" של כל התהליך (503, לא שגיאת JS רגילה שאפשר לתפוס
+// ב-try/catch) כשהחיבור נכשל/נתקע - ללא קשר לתיקוני timeout שניסינו.
+// קריאת HTTP רגילה (fetch) לא סובלת מהבעיה הזו.
+//
+// דורש את ה-Secrets: RESEND_API_KEY, RESEND_FROM (כתובת/שם השולח, למשל
+// "גוטליב את ביטון <no-reply@gebm.co.il>" - הדומיין חייב להיות מאומת ב-Resend,
+// או להשתמש בכתובת הבדיקה onboarding@resend.dev לפני אימות דומיין).
 
 export async function sendMail(
   to: string,
   subject: string,
   content: string
 ): Promise<{ ok: boolean; error?: string }> {
-  const smtpClient = new SMTPClient({
-    connection: {
-      hostname: Deno.env.get('SMTP_HOST')!,
-      port: Number(Deno.env.get('SMTP_PORT') ?? '587'),
-      tls: true,
-      auth: {
-        username: Deno.env.get('SMTP_USERNAME')!,
-        password: Deno.env.get('SMTP_PASSWORD')!,
-      },
-    },
-  })
+  const apiKey = Deno.env.get('RESEND_API_KEY')
+  const from = Deno.env.get('RESEND_FROM')
+
+  if (!apiKey || !from) {
+    return { ok: false, error: 'שליחת מייל לא הוגדרה עדיין (חסרים RESEND_API_KEY / RESEND_FROM)' }
+  }
+
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 8000)
 
   try {
-    await withTimeout(
-      smtpClient.send({
-        from: Deno.env.get('SMTP_FROM')!,
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from,
         to,
         subject,
-        content,
+        text: content,
       }),
-      8000,
-      'שליחת מייל (SMTP)'
-    )
+      signal: controller.signal,
+    })
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      return { ok: false, error: `Resend API החזיר ${res.status}: ${text.slice(0, 300)}` }
+    }
+
     return { ok: true }
   } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      return { ok: false, error: 'שליחת המייל חלפה מעבר לזמן המוקצב (8 שניות)' }
+    }
     return { ok: false, error: err instanceof Error ? err.message : 'שגיאת שליחה' }
   } finally {
-    // סוגרים את החיבור בצורה בטוחה (עם timeout משלה) - אם השליחה נכשלה
-    // או נתקעה, close() עלול לזרוק שגיאה משלו ולהקריס את כל הפונקציה
-    // (500 / net::ERR_FAILED) במקום להחזיר תשובה מבוקרת.
-    try {
-      await withTimeout(smtpClient.close(), 3000, 'סגירת חיבור SMTP')
-    } catch {
-      // מתעלמים - זה רק ניקוי חיבור, לא צריך להשפיע על תוצאת השליחה
-    }
+    clearTimeout(timeoutId)
   }
 }
 

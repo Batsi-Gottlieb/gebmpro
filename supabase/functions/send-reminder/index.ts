@@ -3,12 +3,11 @@
 // שולח תזכורת מייל אמיתית ללקוח אחד (mode: "single") או לכל
 // הלקוחות בפרויקט שטרם השלימו הגשה (mode: "bulk"), לפי הגדרות
 // הפרויקט (email_template) ורשימת המסמכים החסרים/הפסולים בפועל.
-// דורש הרשאת staff, ומשתמש בפרטי SMTP שהוגדרו כ-Secrets.
+// דורש הרשאת staff. שולח מייל דרך Resend API (ראו _shared/mailer.ts).
 
 import { createClient } from 'jsr:@supabase/supabase-js@2'
-import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts'
 import { corsHeaders, handleCors } from '../_shared/cors.ts'
-import { withTimeout } from '../_shared/withTimeout.ts'
+import { sendMail } from '../_shared/mailer.ts'
 
 interface RequiredDoc {
   id: string
@@ -32,7 +31,6 @@ interface ClientRow {
 
 function buildMissingList(requiredDocs: RequiredDoc[], files: FileVersionRow[]): string {
   const latestByDoc = new Map<string, FileVersionRow>()
-  // files מגיעות ממוינות כבר מהחדש לישן; לוקחים את הראשונה שנתקלים בה לכל מסמך
   for (const f of files) {
     if (!latestByDoc.has(f.document_id)) latestByDoc.set(f.document_id, f)
   }
@@ -102,7 +100,7 @@ Deno.serve(async (req: Request) => {
 
     const { projectId, clientId, appUrl } = (await req.json()) as {
       projectId: string
-      clientId?: string // אם קיים -> תזכורת בודדת; אם לא -> גורפת לכל הפרויקט
+      clientId?: string
       appUrl: string
     }
 
@@ -147,18 +145,6 @@ Deno.serve(async (req: Request) => {
         (c) => c.role !== 'manager' || c.send_notifications_to_manager
       )
     }
-
-    const smtpClient = new SMTPClient({
-      connection: {
-        hostname: Deno.env.get('SMTP_HOST')!,
-        port: Number(Deno.env.get('SMTP_PORT') ?? '587'),
-        tls: true,
-        auth: {
-          username: Deno.env.get('SMTP_USERNAME')!,
-          password: Deno.env.get('SMTP_PASSWORD')!,
-        },
-      },
-    })
 
     const results: { clientId: string; status: 'sent' | 'failed' | 'skipped' }[] = []
 
@@ -208,25 +194,8 @@ Deno.serve(async (req: Request) => {
 
       let anySent = false
       for (const recipientEmail of recipientEmails) {
-        let status: 'sent' | 'failed' = 'sent'
-        let errorMessage: string | null = null
-
-        try {
-          await withTimeout(
-            smtpClient.send({
-              from: Deno.env.get('SMTP_FROM')!,
-              to: recipientEmail,
-              subject,
-              content: body,
-            }),
-            8000,
-            'שליחת מייל (SMTP)'
-          )
-          anySent = true
-        } catch (sendErr) {
-          status = 'failed'
-          errorMessage = sendErr instanceof Error ? sendErr.message : 'שגיאת שליחה'
-        }
+        const mailResult = await sendMail(recipientEmail, subject, body)
+        if (mailResult.ok) anySent = true
 
         await supabaseAdmin.from('notification_logs').insert({
           client_id: client.id,
@@ -236,18 +205,12 @@ Deno.serve(async (req: Request) => {
           recipient: recipientEmail,
           subject,
           content: body,
-          status,
-          error_message: errorMessage,
+          status: mailResult.ok ? 'sent' : 'failed',
+          error_message: mailResult.ok ? null : mailResult.error ?? null,
         })
       }
 
       results.push({ clientId: client.id, status: anySent ? 'sent' : 'failed' })
-    }
-
-    try {
-      await withTimeout(smtpClient.close(), 3000, 'סגירת חיבור SMTP')
-    } catch {
-      // מתעלמים - זה רק ניקוי חיבור
     }
 
     return new Response(JSON.stringify({ results }), {
