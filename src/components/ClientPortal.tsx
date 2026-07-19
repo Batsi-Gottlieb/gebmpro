@@ -60,6 +60,13 @@ export default function ClientPortal({
     excel: '.xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   };
 
+  const fileTypeLabels: Record<string, string> = { image: 'תמונה', word: 'Word', pdf: 'PDF', excel: 'Excel' };
+
+  const getAllowedTypesLabel = (doc: RequiredDocument): string => {
+    const types = doc.allowedFileTypes && doc.allowedFileTypes.length ? doc.allowedFileTypes : ['image', 'word', 'pdf', 'excel'];
+    return types.map((t) => fileTypeLabels[t]).join(', ');
+  };
+
   const getAcceptForDoc = (doc: RequiredDocument): string => {
     const types = doc.allowedFileTypes && doc.allowedFileTypes.length ? doc.allowedFileTypes : ['image', 'word', 'pdf', 'excel'];
     return types.map((t) => fileTypeAcceptMap[t]).join(',');
@@ -108,8 +115,7 @@ export default function ClientPortal({
     const doc = project.requiredDocuments.find((d) => d.id === docId);
     if (doc && !isFileTypeAllowed(doc, file)) {
       const types = doc.allowedFileTypes && doc.allowedFileTypes.length ? doc.allowedFileTypes : ['image', 'word', 'pdf', 'excel'];
-      const labels: Record<string, string> = { image: 'תמונה', word: 'Word', pdf: 'PDF', excel: 'Excel' };
-      alert(`סוג הקובץ אינו נתמך למסמך "${doc.name}". סוגים מותרים: ${types.map((t) => labels[t]).join(', ')}.`);
+      alert(`סוג הקובץ אינו נתמך למסמך "${doc.name}". סוגים מותרים: ${types.map((t) => fileTypeLabels[t]).join(', ')}.`);
       return;
     }
     setUploadingDocId(docId);
@@ -307,164 +313,156 @@ export default function ClientPortal({
             </span>
           </div>
 
-          <div className="divide-y divide-slate-200">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 p-5">
             {project.requiredDocuments.map((doc, idx) => {
               const versions = clientState.documents[doc.id] || [];
               const latestFile = versions[0];
               const isExpanded = expandedDocId === doc.id;
+              const isDragActive = dragActiveId === doc.id;
 
               // Determine status
               let statusText = 'טרם הועלה';
               let statusColor = 'bg-slate-100 text-slate-600 border-slate-200';
-              let statusIcon = <FileText className="w-4 h-4" />;
+              let statusIcon = <FileText className="w-3.5 h-3.5" />;
 
               if (latestFile) {
                 if (latestFile.status === 'approved') {
                   statusText = 'מאושר';
                   statusColor = 'bg-emerald-50 text-emerald-700 border-emerald-200';
-                  statusIcon = <CheckCircle className="w-4 h-4" />;
+                  statusIcon = <CheckCircle className="w-3.5 h-3.5" />;
                 } else if (latestFile.status === 'draft') {
-                  statusText = 'טיוטה (טרם נשלח)';
+                  statusText = 'טיוטה';
                   statusColor = 'bg-amber-50 text-amber-700 border-amber-200';
-                  statusIcon = <FileText className="w-4 h-4" />;
+                  statusIcon = <FileText className="w-3.5 h-3.5" />;
                 } else if (latestFile.status === 'pending') {
                   statusText = 'בבדיקה';
                   statusColor = 'bg-indigo-50 text-indigo-700 border-indigo-200';
-                  statusIcon = <Clock className="w-4 h-4" />;
+                  statusIcon = <Clock className="w-3.5 h-3.5" />;
                 } else if (latestFile.status === 'rejected') {
                   statusText = 'לא תקין';
                   statusColor = 'bg-rose-50 text-rose-700 border-rose-200';
-                  statusIcon = <AlertTriangle className="w-4 h-4" />;
+                  statusIcon = <AlertTriangle className="w-3.5 h-3.5" />;
                 }
               }
 
               return (
-                <div key={doc.id} className="p-4 md:p-6 hover:bg-slate-50/50 transition-colors" id={`doc-row-${doc.id}`}>
-                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                    {/* Doc Title & Info */}
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono text-xs text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
-                          סעיף {idx + 1}
-                        </span>
-                        <h4 className="font-bold text-slate-900 text-base">{doc.name}</h4>
-                        {doc.isRequired ? (
-                          <span className="text-rose-600 text-xs font-semibold bg-rose-50 px-1.5 py-0.5 rounded">
-                            * חובה
-                          </span>
-                        ) : (
-                          <span className="text-slate-500 text-xs bg-slate-100 px-1.5 py-0.5 rounded">
-                            רשות
-                          </span>
-                        )}
+                <div
+                  key={doc.id}
+                  onDragEnter={(e) => handleDrag(e, doc.id)}
+                  onDragOver={(e) => handleDrag(e, doc.id)}
+                  onDragLeave={(e) => handleDrag(e, doc.id)}
+                  onDrop={(e) => handleDrop(e, doc.id)}
+                  className={`flex flex-col gap-2 rounded-xl border p-4 transition-colors ${
+                    isDragActive
+                      ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-200'
+                      : 'border-slate-200 bg-white hover:border-indigo-200 hover:shadow-sm'
+                  }`}
+                  id={`doc-row-${doc.id}`}
+                >
+                  {/* Header: index + name + status */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                      <span className="font-mono text-[10px] text-slate-400 bg-slate-100 px-1 py-0.5 rounded flex-shrink-0">
+                        {idx + 1}
+                      </span>
+                      <h4 className="font-bold text-slate-900 text-sm leading-tight truncate" title={doc.name}>
+                        {doc.name}
+                      </h4>
+                    </div>
+                    <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border flex-shrink-0 ${statusColor}`}>
+                      {statusIcon}
+                      {statusText}
+                    </span>
+                  </div>
 
-                        {/* Status Badge */}
-                        <span className={`inline-flex items-center gap-1 text-xs px-2.5 py-0.5 rounded-full border ${statusColor}`}>
-                          {statusIcon}
-                          {statusText}
-                        </span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {doc.isRequired ? (
+                      <span className="text-rose-600 text-[10px] font-semibold bg-rose-50 px-1.5 py-0.5 rounded">
+                        * חובה
+                      </span>
+                    ) : (
+                      <span className="text-slate-500 text-[10px] bg-slate-100 px-1.5 py-0.5 rounded">
+                        רשות
+                      </span>
+                    )}
+                    <span className="text-[10px] text-slate-400">{getAllowedTypesLabel(doc)}</span>
+                  </div>
+
+                  {doc.description && (
+                    <p className="text-[11px] text-slate-500">{doc.description}</p>
+                  )}
+
+                  {/* CPA Feedback alert if rejected */}
+                  {latestFile && latestFile.status === 'rejected' && (
+                    <div className="bg-rose-50 border-r-4 border-rose-500 p-2 rounded-l-lg text-rose-900 text-[11px] flex gap-1.5 items-start">
+                      <ShieldAlert className="w-3.5 h-3.5 text-rose-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold">הערת רו"ח - נא לתקן ולהעלות קובץ חדש:</p>
+                        <p className="mt-0.5 text-rose-800">{latestFile.reviewComment || 'נא לבדוק את תקינות הקובץ.'}</p>
                       </div>
-
-                      {doc.description && (
-                        <p className="text-xs text-slate-500 mt-1.5">{doc.description}</p>
-                      )}
-
-                      {/* CPA Feedback alert if rejected */}
-                      {latestFile && latestFile.status === 'rejected' && (
-                        <div className="mt-3 bg-rose-50 border-r-4 border-rose-500 p-3 rounded-l-lg text-rose-900 text-sm flex gap-2 items-start">
-                          <ShieldAlert className="w-5 h-5 text-rose-600 flex-shrink-0 mt-0.5" />
-                          <div>
-                            <p className="font-bold">הערת רואה חשבון (נא לתקן ולהעלות קובץ חדש):</p>
-                            <p className="mt-1 text-rose-800">{latestFile.reviewComment || 'נא לבדוק את תקינות הקובץ.'}</p>
-                            <p className="text-xs text-rose-500 mt-1">תאריך בדיקה: {latestFile.reviewedAt || 'לאחרונה'}</p>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* CPA Approved Feedback if exists */}
-                      {latestFile && latestFile.status === 'approved' && latestFile.reviewComment && (
-                        <p className="text-xs text-emerald-600 mt-1.5 font-medium flex items-center gap-1">
-                          ✓ {latestFile.reviewComment}
-                        </p>
-                      )}
                     </div>
+                  )}
 
-                    {/* Upload Controls / Latest File Info */}
-                    <div className="flex items-center gap-3 justify-end flex-wrap lg:flex-nowrap">
-                      {latestFile && (
-                        <div className="text-right pl-4 border-l border-slate-200 hidden sm:block">
-                          <p className="text-xs font-medium text-slate-700 truncate max-w-[200px]" title={latestFile.fileName}>
-                            {latestFile.fileName}
-                          </p>
-                          <p className="text-[10px] text-slate-400">
-                            גרסה {latestFile.version} • {latestFile.uploadedAt}
-                          </p>
-                        </div>
-                      )}
+                  {/* CPA Approved Feedback if exists */}
+                  {latestFile && latestFile.status === 'approved' && latestFile.reviewComment && (
+                    <p className="text-[11px] text-emerald-600 font-medium flex items-center gap-1">
+                      ✓ {latestFile.reviewComment}
+                    </p>
+                  )}
 
-                      {/* Upload Button Trigger or Loader */}
-                      {uploadingDocId === doc.id ? (
-                        <div className="bg-slate-100 text-slate-600 px-4 py-2 rounded-lg border border-slate-200 text-sm flex items-center gap-2">
-                          <svg className="animate-spin h-4 w-4 text-indigo-600" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                          </svg>
-                          מעלה קובץ...
-                        </div>
-                      ) : (
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => triggerFileInput(doc.id)}
-                            className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-4 py-2 rounded-lg text-sm flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
-                            id={`btn-upload-${doc.id}`}
-                          >
-                            <Upload className="w-4 h-4" />
-                            {latestFile ? 'העלאת גרסה חדשה' : 'העלאת קובץ'}
-                          </button>
+                  {/* Latest file info */}
+                  {latestFile && (
+                    <p className="text-[11px] text-slate-500 truncate flex items-center gap-1" title={latestFile.fileName}>
+                      <Paperclip className="w-3 h-3 flex-shrink-0" />
+                      {latestFile.fileName} • גרסה {latestFile.version}
+                    </p>
+                  )}
 
-                          {versions.length > 0 && (
-                            <button
-                              onClick={() => setExpandedDocId(isExpanded ? null : doc.id)}
-                              className="bg-slate-100 hover:bg-slate-200 text-slate-700 p-2 rounded-lg text-sm flex items-center gap-1.5 transition-colors cursor-pointer"
-                              title="היסטוריית גרסאות"
-                              id={`btn-history-${doc.id}`}
-                            >
-                              <History className="w-4 h-4" />
-                              <span className="text-xs bg-slate-200 px-1.5 py-0.5 rounded font-bold">{versions.length}</span>
-                              {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                            </button>
-                          )}
-                        </div>
-                      )}
+                  {/* Upload row */}
+                  <div className="mt-auto flex items-center gap-2 pt-1">
+                    {uploadingDocId === doc.id ? (
+                      <div className="flex-1 bg-slate-100 text-slate-600 px-3 py-1.5 rounded-lg border border-slate-200 text-xs flex items-center justify-center gap-2">
+                        <svg className="animate-spin h-3.5 w-3.5 text-indigo-600" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        מעלה...
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => triggerFileInput(doc.id)}
+                        className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs flex items-center justify-center gap-1.5 transition-colors shadow-xs cursor-pointer"
+                        id={`btn-upload-${doc.id}`}
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        {latestFile ? 'גרסה חדשה' : 'העלאת קובץ'}
+                      </button>
+                    )}
 
-                      {/* Hidden File Input */}
-                      <input
-                        type="file"
-                        accept={getAcceptForDoc(doc)}
-                        ref={(el) => { fileInputRefs.current[doc.id] = el; }}
-                        onChange={(e) => handleFileChange(e, doc.id)}
-                        className="hidden"
-                      />
-                    </div>
+                    {versions.length > 0 && (
+                      <button
+                        onClick={() => setExpandedDocId(isExpanded ? null : doc.id)}
+                        className="bg-slate-100 hover:bg-slate-200 text-slate-700 p-1.5 rounded-lg text-xs flex items-center gap-1 transition-colors cursor-pointer flex-shrink-0"
+                        title="היסטוריית גרסאות"
+                        id={`btn-history-${doc.id}`}
+                      >
+                        <History className="w-3.5 h-3.5" />
+                        <span className="text-[10px] bg-slate-200 px-1 py-0.5 rounded font-bold">{versions.length}</span>
+                        {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                      </button>
+                    )}
                   </div>
 
-                  {/* Drag and Drop Zone if expanded or as helper */}
-                  <div
-                    onDragEnter={(e) => handleDrag(e, doc.id)}
-                    onDragOver={(e) => handleDrag(e, doc.id)}
-                    onDragLeave={(e) => handleDrag(e, doc.id)}
-                    onDrop={(e) => handleDrop(e, doc.id)}
-                    className={`mt-4 border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center transition-colors cursor-pointer ${
-                      dragActiveId === doc.id
-                        ? 'border-indigo-500 bg-indigo-50 text-indigo-900'
-                        : 'border-slate-200 bg-slate-50 hover:bg-slate-100/50 text-slate-500'
-                    }`}
-                    onClick={() => triggerFileInput(doc.id)}
-                  >
-                    <Upload className={`w-8 h-8 mb-2 ${dragActiveId === doc.id ? 'text-indigo-600 animate-bounce' : 'text-slate-400'}`} />
-                    <p className="text-sm font-bold text-slate-700">גררו והשליכו את הקובץ כאן או לחצו לבחירה</p>
-                    <p className="text-xs text-slate-400 mt-1">תומך בקבצי Excel, PDF, Word ותמונות</p>
-                  </div>
+                  <p className="text-[10px] text-slate-400 text-center">גררו קובץ לכאן או לחצו על הכפתור</p>
+
+                  {/* Hidden File Input */}
+                  <input
+                    type="file"
+                    accept={getAcceptForDoc(doc)}
+                    ref={(el) => { fileInputRefs.current[doc.id] = el; }}
+                    onChange={(e) => handleFileChange(e, doc.id)}
+                    className="hidden"
+                  />
 
                   {/* File History Expandable Section */}
                   <AnimatePresence>
@@ -473,51 +471,42 @@ export default function ClientPortal({
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: 'auto', opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
-                        className="mt-4 bg-slate-50 rounded-lg p-4 border border-slate-200 overflow-hidden"
+                        className="bg-slate-50 rounded-lg p-3 border border-slate-200 overflow-hidden"
                       >
-                        <h5 className="font-bold text-xs text-slate-500 mb-2 uppercase tracking-wider flex items-center gap-1">
-                          <History className="w-3.5 h-3.5" />
-                          היסטוריית גרסאות שהועלו (כל הגרסאות נשמרות למעקב):
+                        <h5 className="font-bold text-[10px] text-slate-500 mb-2 uppercase tracking-wider flex items-center gap-1">
+                          <History className="w-3 h-3" />
+                          היסטוריית גרסאות:
                         </h5>
-                        <div className="space-y-2">
+                        <div className="space-y-1.5">
                           {versions.map((ver, vIdx) => (
-                            <div 
+                            <div
                               key={ver.id}
-                              className={`flex justify-between items-center p-2.5 rounded border text-sm ${
+                              className={`flex justify-between items-center p-2 rounded border text-[11px] ${
                                 vIdx === 0 ? 'bg-white border-slate-200 shadow-xs' : 'bg-slate-100/50 border-slate-200 opacity-75'
                               }`}
                             >
-                              <div className="flex items-center gap-2">
-                                <Paperclip className="w-4 h-4 text-slate-400" />
-                                <div>
-                                  <p className="font-bold text-slate-800 flex items-center gap-1.5">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <Paperclip className="w-3 h-3 text-slate-400 flex-shrink-0" />
+                                <div className="min-w-0">
+                                  <p className="font-bold text-slate-800 truncate" title={ver.fileName}>
                                     {ver.fileName}
-                                    {vIdx === 0 && (
-                                      <span className="text-[10px] bg-indigo-500/10 text-indigo-700 px-1 rounded-sm font-bold">
-                                        גרסה אחרונה
-                                      </span>
-                                    )}
                                   </p>
-                                  <p className="text-[10px] text-slate-400">
-                                    הועלה ב- {ver.uploadedAt} • גודל: {ver.fileSize || 'לא ידוע'}
+                                  <p className="text-[9px] text-slate-400">
+                                    {ver.uploadedAt}
                                   </p>
                                 </div>
                               </div>
-
-                              <div className="flex items-center gap-2">
-                                {/* State status per version */}
-                                <span className={`text-xs px-2 py-0.5 rounded font-bold ${
-                                  ver.status === 'approved' 
-                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
-                                    : ver.status === 'draft'
-                                    ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                                    : ver.status === 'rejected' 
-                                    ? 'bg-rose-50 text-rose-700 border border-rose-200' 
-                                    : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
-                                }`}>
-                                  {ver.status === 'approved' ? 'מאושר' : ver.status === 'draft' ? 'טיוטה' : ver.status === 'rejected' ? 'לא תקין' : 'בבדיקה'}
-                                </span>
-                              </div>
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold flex-shrink-0 ${
+                                ver.status === 'approved'
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : ver.status === 'draft'
+                                  ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                  : ver.status === 'rejected'
+                                  ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                                  : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                              }`}>
+                                {ver.status === 'approved' ? 'מאושר' : ver.status === 'draft' ? 'טיוטה' : ver.status === 'rejected' ? 'לא תקין' : 'בבדיקה'}
+                              </span>
                             </div>
                           ))}
                         </div>
