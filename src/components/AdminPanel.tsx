@@ -1831,7 +1831,7 @@ export default function AdminPanel({
                       מטריצת סטטוס מסמכים - כל הלקוחות
                     </h3>
                     <p className="text-xs text-slate-500">
-                      כל עמודה היא לקוח וכל שורה מסמך נדרש - הסימון בכל תא מציג את הסטטוס של אותו מסמך אצל אותו לקוח.
+                      כל שורה היא לקוח וכל עמודה מסמך נדרש - הסימון בכל תא מציג את הסטטוס של אותו מסמך אצל אותו לקוח.
                     </p>
                   </div>
                   <button
@@ -1863,30 +1863,30 @@ export default function AdminPanel({
                     <table className="w-full text-xs border-collapse">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-200">
-                          <th className="p-2.5 text-right font-bold text-slate-600 sticky right-0 bg-slate-50 z-10 min-w-[180px]">
-                            מסמך \ לקוח
+                          <th className="p-2.5 text-right font-bold text-slate-600 sticky right-0 bg-slate-50 z-10 min-w-[160px]">
+                            לקוח \ מסמך
                           </th>
-                          {projectClients.map((c) => (
-                            <th key={c.id} className="p-2.5 text-center font-bold text-slate-600 min-w-[110px] whitespace-nowrap">
-                              {c.name}
+                          {selectedProject.requiredDocuments.map((doc) => (
+                            <th key={doc.id} className="p-2.5 text-center font-bold text-slate-600 min-w-[130px] whitespace-nowrap">
+                              {doc.name}
+                              {!doc.isRequired && <span className="text-slate-400 font-normal"> (לא חובה)</span>}
                             </th>
                           ))}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {selectedProject.requiredDocuments.map((doc) => (
-                          <tr key={doc.id} className="hover:bg-slate-50/60">
+                        {projectClients.map((c) => (
+                          <tr key={c.id} className="hover:bg-slate-50/60">
                             <td className="p-2.5 font-bold text-slate-700 sticky right-0 bg-white z-10 border-l border-slate-100 whitespace-nowrap">
-                              {doc.name}
-                              {!doc.isRequired && <span className="text-slate-400 font-normal"> (לא חובה)</span>}
+                              {c.name}
                             </td>
-                            {projectClients.map((c) => {
+                            {selectedProject.requiredDocuments.map((doc) => {
                               const state = clientStates.find(s => s.clientId === c.id && s.projectId === selectedProject.id);
                               const versions = state?.documents[doc.id] || [];
                               const latest = versions[0];
                               const status = latest ? latest.status : 'missing';
                               return (
-                                <td key={c.id} className="p-2.5 text-center" title={
+                                <td key={doc.id} className="p-2.5 text-center" title={
                                   status === 'approved' ? 'אושר' :
                                   status === 'pending' ? 'ממתין לבדיקה' :
                                   status === 'rejected' ? 'נפסל' :
